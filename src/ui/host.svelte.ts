@@ -319,11 +319,12 @@ export class GameHost implements TableHost {
     if (changed && r.homed.length === 0) for (const id of moved) if (id !== null) this.bus.emit({ type: 'card-moved', card: id, from: pile, to });
     return changed;
   }
-  tap(pile: string, index: number): void {
-    if (pile === 'stock') { this.apply(this.module.draw(this.board, this.twists()), 'stock'); sound('flip', 0.5); return; }
+  tap(pile: string, index: number): boolean {
+    if (pile === 'stock') { const ok = this.apply(this.module.draw(this.board, this.twists()), 'stock'); if (ok) sound('flip', 0.5); return ok; }
     const to = this.module.autoTarget(this.board, pile, index, this.twists());
-    if (to) { if (this.tryMove(pile, index, to)) { sound('place', 0.5); haptic('soft'); return; } }
+    if (to && this.tryMove(pile, index, to)) { sound('place', 0.5); haptic('soft'); return true; }
     sound('tick', 0.15);
+    return false;
   }
   tapSlot(pile: string): void {
     if (pile === 'stock') { this.apply(this.module.draw(this.board, this.twists()), 'stock'); }

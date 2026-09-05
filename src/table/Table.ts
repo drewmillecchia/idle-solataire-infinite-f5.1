@@ -22,8 +22,8 @@ export interface TableHost {
   legalTargets(pile: string, index: number): string[];
   /** Attempt the move; return true if the board changed. The host will push a new view. */
   tryMove(pile: string, index: number, to: string): boolean;
-  /** Tap on a card: auto-move (or draw when the pile is the stock). */
-  tap(pile: string, index: number): void;
+  /** Tap on a card: auto-move (or draw when the pile is the stock). Returns true if the board changed. */
+  tap(pile: string, index: number): boolean;
   /** Tap on an empty pile slot (e.g. empty stock → recycle). */
   tapSlot(pile: string): void;
   /** Any pointer activity (resets the Auto-Dealer's patience). */
@@ -208,6 +208,7 @@ export class Table {
       return;
     }
     if (opts.instant || opts.deal) this.cancelChoreography();
+    this.disarm();
     if (opts.deal && opts.shuffle && opts.shuffle !== 'none') {
       // Choreograph: gather → shuffle → then the normal deal. The deal is scheduled after the shuffle.
       this.shuffleChoreography(view, opts.shuffle);
@@ -598,6 +599,14 @@ export class Table {
   }
   private hinted: CardSprite[] = [];
   private hintTarget: string | null = null;
+  /** A tapped card with several legal targets and no obvious one: glow them and wait for a second tap. */
+  private armed: { pile: string; index: number; targets: string[]; sprites: CardSprite[] } | null = null;
+  private disarm(): void {
+    if (!this.armed) return;
+    this.setTargetGlow(this.armed.targets, 0);
+    this.armed.sprites.forEach((s) => { s.lift.target = 0; s.scaleS.target = 1; });
+    this.armed = null;
+  }
 
   /** A tap during a shuffle or deal finishes it immediately (docs/05-feel.md: the deal is skippable). */
   skipChoreography(): void {
@@ -620,7 +629,16 @@ export class Table {
     const { x, y } = e.global;
     if (!sp) {
       const slot = e.target as Sprite & { pileId?: string };
-      if (slot?.pileId) this.host.tapSlot(slot.pileId);
+      if (slot?.pileId) {
+        if (this.armed && this.armed.targets.includes(slot.pileId)) {
+          const a = this.armed;
+          this.disarm();
+          if (this.host.tryMove(a.pile, a.index, slot.pileId)) { this.host.sound('place', 0.5); this.host.haptic('soft'); }
+          return;
+        }
+        this.disarm();
+        this.host.tapSlot(slot.pileId);
+      } else this.disarm();
       return;
     }
     if (sp.id < 0) return;
@@ -665,7 +683,7 @@ export class Table {
     const d = this.drag;
     if (!d || e.pointerId !== d.pointerId) return;
     const { x, y } = e.global;
-    if (!d.moved && Math.hypot(x - d.startX, y - d.startY) > this.feel.dragThresholdPx) d.moved = true;
+    if (!d.moved && Math.hypot(x - d.startX, y - d.startY) > this.feel.dragThresholdPx) { d.moved = true; this.disarm(); }
     if (!d.moved || d.targets.length === 0 && !d.sprites[0]?.pickable) return;
     if (d.targets.length === 0) return; // not pickable: no drag
     const now = stamp(e);
@@ -731,7 +749,24 @@ export class Table {
       const key = `${d.pile}:${d.index}`;
       this.lastTapAt = performance.now();
       this.lastTapKey = key;
-      this.host.tap(d.pile, d.index);
+      // Second tap of an armed pair: complete the move onto the tapped pile.
+      if (this.armed && this.armed.targets.includes(d.pile) && !(this.armed.pile === d.pile)) {
+        const a = this.armed;
+        this.disarm();
+        if (this.host.tryMove(a.pile, a.index, d.pile)) { this.host.sound('place', 0.5); this.host.haptic('soft'); }
+        return;
+      }
+      const wasArmed = this.armed !== null;
+      this.disarm();
+      if (wasArmed && this.armed === null && d.targets.length === 0) return; // a tap elsewhere just disarms
+      const changed = this.host.tap(d.pile, d.index);
+      if (!changed && d.targets.length > 0) {
+        // Arm: several legal targets and the host had no obvious pick.
+        this.armed = { pile: d.pile, index: d.index, targets: d.targets, sprites: d.sprites };
+        d.sprites.forEach((s) => { s.lift.target = 0.6; s.scaleS.target = 1 + (this.feel.liftScale - 1) * 0.6; });
+        this.setTargetGlow(d.targets, this.feel.targetGlowAlpha);
+        this.host.sound('pick', 0.3);
+      }
       return;
     }
     if (d.targets.length === 0) {
