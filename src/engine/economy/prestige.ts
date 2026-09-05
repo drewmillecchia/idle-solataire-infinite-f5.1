@@ -165,7 +165,7 @@ export function resetRun(
     handsWon: 0,
     homedThisRun: 0,
     undosThisHand: 0,
-    hand: { echoRanks: [], homedThisHand: [], roll: 1 }
+    hand: { echoRanks: [], homedThisHand: [], roll: 1, seed: 0, fizzleSeq: 0 }
   };
   return chosen;
 }

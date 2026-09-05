@@ -15,7 +15,7 @@ import {
 } from '$engine/economy/upgrades';
 import { checkMilestones } from '$engine/economy/milestones';
 import { D } from '$engine/numbers';
-import { UPGRADES } from '$content/index';
+import { ECONOMY, UPGRADES } from '$content/index';
 
 function withBus() {
   const events: GameEvent[] = [];
@@ -134,6 +134,35 @@ describe('hand lifecycle', () => {
     const burst = winHand(state, bus, { game: 'klondike', moves: 5, seconds: 10 });
     const expected = rate.times(60).times(0.7);
     expect(burst.minus(expected).abs().div(expected).toNumber()).toBeLessThan(1e-9);
+  });
+
+  it('pays exactly deckRate x winBurstSeconds x burstMult (ECONOMY, invariant #9)', () => {
+    const state = createInitialState(0);
+    const { bus } = withBus();
+    const card = cardId('D', 3);
+    homeCard(state, bus, card, 'foundation-d');
+    dealHand(state, bus, 'klondike', 5);
+
+    const d = derive(state);
+    const burst = winHand(state, bus, { game: 'klondike', moves: 1, seconds: 1 });
+    const expected = d.deckRate.times(ECONOMY.winBurstSeconds).times(d.burstMult);
+    expect(burst.eq(expected)).toBe(true);
+  });
+
+  it("the Scholar's undo is free: winHand pays the full burst even with undosThisHand > 0", () => {
+    const state = createInitialState(0);
+    const { bus } = withBus();
+    const card = cardId('D', 4);
+    homeCard(state, bus, card, 'foundation-d');
+    state.run.way = 'scholar';
+    state.prestige.waysUnlocked.push('scholar');
+    dealHand(state, bus, 'klondike', 6);
+    state.run.undosThisHand = 3;
+
+    const d = derive(state);
+    const burst = winHand(state, bus, { game: 'klondike', moves: 1, seconds: 1 });
+    const expected = d.deckRate.times(ECONOMY.winBurstSeconds).times(d.burstMult);
+    expect(burst.eq(expected)).toBe(true);
   });
 });
 

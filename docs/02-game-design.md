@@ -82,7 +82,7 @@ branch make that Way stronger, so a player can specialise or rotate.
 | --- | --- | --- |
 | **Way of the Hand** | Active, sharp | Home plays pay ×3 spark; charge caps higher; Auto-Dealer disabled; win burst 120 s. |
 | **Way of the Dealer** | Idle, watchful | Auto-Dealer unlocked from minute one and faster; idle rate +50%; home plays pay ×0.5 spark. |
-| **Way of the Gambler** | Variance | Every hand rolls a 0.5×–3× multiplier on sparks and burst (log-uniform, seeded by the hand); wins re-roll and keep the higher. Mark fizzle (10 %) not built yet. |
+| **Way of the Gambler** | Variance | Every hand rolls a 0.5×–3× multiplier on sparks and burst (log-uniform, seeded by the hand); wins re-roll and keep the higher. A Mark misfires 10 % of the time, deterministically per hand seed, and says so with a muted thump. ✅ 2026-09-05 |
 | **Way of the Scholar** | Puzzle | Deals are always winnable (Klondike: solver worker, `findWinnableSeed`, ~16 ms median); undo free; each charge worth ×0.7 (chargeSlope) but every *win* charges the whole awake deck +1. ✅ 2026-09-05 |
 
 A Way is not a class; it is a lens for one run. The first cut offers Hand and Dealer; others reveal.

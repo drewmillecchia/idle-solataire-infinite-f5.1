@@ -7,3 +7,4 @@ export * from './games/klondike';
 export * from './games/tripeaks';
 export * from './games/golf';
 export * from './games/pyramid';
+export * from './games/freecell';

@@ -6,6 +6,7 @@ import type Decimal from 'break_eternity.js';
 import { derive } from './derive';
 import { chargeCard } from './cards';
 import { mulberry32 } from '../rng';
+import { ECONOMY } from '$content/index';
 import type { EventBus } from '../events';
 import type { GameState } from '../state';
 
@@ -13,10 +14,11 @@ import type { GameState } from '../state';
  * Way of the Gambler (docs/02-game-design.md §5): every deal is a wager. The roll is LOG-uniform
  * over [ROLL_MIN, ROLL_MAX] — `0.5 x 6^u` — so "half" and "double" are equally likely draws and
  * the geometric mean is 1.22x. A uniform roll would sit at 1.75x and make the Gambler strictly
- * best; log-uniform makes it a real wager.
+ * best; log-uniform makes it a real wager. Re-exported from `content/economy.json` (invariant #9)
+ * so existing imports of `ROLL_MIN`/`ROLL_MAX` keep working unchanged.
  */
-export const ROLL_MIN = 0.5;
-export const ROLL_MAX = 3;
+export const ROLL_MIN = ECONOMY.gamblerRollMin;
+export const ROLL_MAX = ECONOMY.gamblerRollMax;
 
 /** The Gambler's roll for a given seed. Deterministic: the same seed always gives the same wager. */
 export function gamblerRoll(seed: number): number {
@@ -44,9 +46,9 @@ export interface WinHandParams {
 /** Pays the win burst: 60s of deckRate x burstMult, halved-ish (x0.7) if the hand used an undo. */
 export function winHand(state: GameState, bus: EventBus, params: WinHandParams): Decimal {
   const d = derive(state);
-  // The Scholar's undo is free; elsewhere a hand with undos pays 70 % (docs/06 — a nudge, not a punishment).
-  const undoPenalty = state.run.undosThisHand > 0 && state.run.way !== 'scholar' ? 0.7 : 1;
-  const burst = d.deckRate.times(60).times(d.burstMult).times(undoPenalty);
+  // The Scholar's undo is free; elsewhere a hand with undos pays the penalty (docs/06 — a nudge, not a punishment).
+  const undoPenalty = state.run.undosThisHand > 0 && state.run.way !== 'scholar' ? ECONOMY.undoPenalty : 1;
+  const burst = d.deckRate.times(ECONOMY.winBurstSeconds).times(d.burstMult).times(undoPenalty);
 
   state.shuffles = state.shuffles.plus(burst);
   state.lifetimeShuffles = state.lifetimeShuffles.plus(burst);
@@ -84,7 +86,11 @@ export function dealHand(state: GameState, bus: EventBus, game: string, seed: nu
   state.run.hand = {
     echoRanks: [],
     homedThisHand: [],
-    roll: state.run.way === 'gambler' ? gamblerRoll(seed) : 1
+    roll: state.run.way === 'gambler' ? gamblerRoll(seed) : 1,
+    // The Gambler's Mark fizzle (docs/02 §5) derives from this seed and `fizzleSeq`, never
+    // Math.random(), so a replay of the same events fizzles the same way (marks/interpret.ts).
+    seed,
+    fizzleSeq: 0
   };
   bus.emit({ type: 'hand-dealt', game, seed });
 }

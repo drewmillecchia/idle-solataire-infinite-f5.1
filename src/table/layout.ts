@@ -53,6 +53,27 @@ export function layoutBoard(view: BoardView, feltW: number, feltH: number, pad =
   for (const pile of view.piles) {
     const x = offsetX + pile.x * (cardW + gapX);
     const y = offsetY + pile.y * (cardH + gapY);
+
+    /**
+     * Fan compression. A pile's natural height grows with its card count, so a game whose columns can
+     * get long (FreeCell, late Klondike) would otherwise have to declare a worst-case `rows` and make
+     * every card tiny even at the deal. Instead the grid stays sized for the common case and a pile
+     * that would run off the felt fans tighter — which is what a person does with real cards.
+     */
+    const tightness = (() => {
+      if (pile.fan !== 'down' && pile.fan !== 'down-tight') return 1;
+      const base = pile.fan === 'down-tight' ? 0.6 : 1;
+      let natural = 0;
+      for (let j = 0; j < pile.cards.length - 1; j++) {
+        const c = pile.cards[j];
+        natural += (c && c.faceUp ? FAN_UP : FAN_DOWN) * cardH * base;
+      }
+      const room = feltH - pad - (y + cardH);
+      if (natural <= room || natural === 0) return 1;
+      // Never squeeze past the point where an index corner is still readable.
+      return Math.max(0.28, room / natural);
+    })();
+
     const cardPos = (i: number) => {
       if (pile.fan === 'none') return { x, y };
       if (pile.fan === 'right') {
@@ -65,7 +86,7 @@ export function layoutBoard(view: BoardView, feltW: number, feltH: number, pad =
       let dy = 0;
       for (let j = 0; j < i; j++) {
         const c = pile.cards[j];
-        dy += (c && c.faceUp ? FAN_UP : FAN_DOWN) * cardH * (pile.fan === 'down-tight' ? 0.6 : 1);
+        dy += (c && c.faceUp ? FAN_UP : FAN_DOWN) * cardH * (pile.fan === 'down-tight' ? 0.6 : 1) * tightness;
       }
       return { x, y: y + dy };
     };

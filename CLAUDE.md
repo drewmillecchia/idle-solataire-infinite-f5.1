@@ -104,5 +104,11 @@ docs/  brainstorming/  memory/  .claude/{agents,skills}
   host syncs boot/30 s/hide with the greater-progress conflict rule. 354 tests + `tools/cloud-probe.mjs`.
 - **Scholar live** — `rules/solver/klondike.ts` (in-place DFS, transposition table, safe automove; 48 % of seeds proven
   within 60 k nodes, median 16 ms to find one) behind a Web Worker; free undo; wins charge the awake deck. 369 tests.
-- Open: Gambler Mark fizzle, Golf/Pyramid feel pass on iPad, M6 sound polish + Idle Riffle, DynamoDB store + real auth,
-  Ascension.
+- **Five games** — Klondike, TriPeaks, Golf, Pyramid, FreeCell, all through the unchanged contract; the footer
+  picker switches between them. The layout compresses a pile's fan when it outgrows the grid, so a game with
+  deep columns need not shrink every card at the deal.
+- **Platform + polish** — real-touch iPad probe in the gate, install metadata, Idle Riffle (hold the deck), a
+  hint that telegraphs a move, the Keeper's first note, constellations in the window, layered sound with a
+  volume slider, an off-canvas keyboard/screen-reader layer, Gambler Mark fizzle, payout constants in
+  `content/economy.json`. 443 tests.
+- Open: DynamoDB store + real auth, Ascension (layer 3), per-game statistics, sound *samples*, a Lighthouse pass.

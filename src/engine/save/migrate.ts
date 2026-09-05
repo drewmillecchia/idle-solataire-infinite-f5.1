@@ -68,6 +68,23 @@ function v3ToV4(raw: RawSave): RawSave {
   return { ...raw, version: 4, run, prestige };
 }
 
+/**
+ * v4 -> v5 (Gambler Mark fizzle): adds `run.hand.seed` and `run.hand.fizzleSeq`.
+ *
+ * A v4 save's in-progress hand was dealt before the fizzle counter existed, so it starts at 0; its
+ * seed (if the payload happens to carry one already, e.g. round-tripped through a partial write)
+ * is kept, otherwise 0 — either way the next `dealHand` overwrites both.
+ */
+function v4ToV5(raw: RawSave): RawSave {
+  const run = asRecord(raw.run);
+  const hand = asRecord(run.hand);
+  hand.seed = typeof hand.seed === 'number' ? hand.seed : 0;
+  hand.fizzleSeq = 0;
+  run.hand = hand;
+
+  return { ...raw, version: 5, run };
+}
+
 export function migrate(raw: RawSave): RawSave {
   const version = typeof raw.version === 'number' ? raw.version : 0;
   switch (version) {
@@ -78,6 +95,8 @@ export function migrate(raw: RawSave): RawSave {
     case 3:
       return v3ToV4(raw);
     case 4:
+      return v4ToV5(raw);
+    case 5:
       return raw;
     default:
       // Unknown, missing, or future version: pass through. `deserialize`'s repair pass fills

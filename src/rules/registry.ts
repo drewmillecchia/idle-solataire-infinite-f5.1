@@ -6,8 +6,9 @@ import { klondike } from './games/klondike';
 import { tripeaks } from './games/tripeaks';
 import { golf } from './games/golf';
 import { pyramid } from './games/pyramid';
+import { freecell } from './games/freecell';
 
-export const GAMES: GameModule<any>[] = [klondike, tripeaks, golf, pyramid];
+export const GAMES: GameModule<any>[] = [klondike, tripeaks, golf, pyramid, freecell];
 
 export function gameById(id: string): GameModule<any> | undefined {
   return GAMES.find((g) => g.id === id);

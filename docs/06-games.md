@@ -38,7 +38,7 @@ Rule-twist Marks reach rules through a `Twists` object the module *may* consult:
 | 2 | **TriPeaks** | Fast, forgiving (~90 % winnable), chains → sparks feel great. Proves the contract with a totally different layout. | ✅ Shipped (2026-09-05) with **zero** renderer changes. Greedy wins 11/40. Every pyramid position is its own one-card pile. |
 | 3 | **Golf** | Very short hands (~1–2 min). Low win rate makes wins special. | ✅ Shipped (2026-09-05). Option `wrap` (A↔K) default off. Greedy wins ~0.5 % (classic) / 8 % (wrap) — humans do far better; wins are meant to be rare. |
 | 4 | **Pyramid** | A *matching* game (pairs to 13). Different mental mode. | ✅ Shipped (2026-09-05). Stock top and waste top are playable; option `redeals` default 2. Greedy wins ~22 % with 2 redeals (the "<5 %" folklore assumes no redeals and no stock-top play) — set `redeals: 0` if it should be brutal. Pairs ride `move(pileA, 0, pileB)`; the table's armed tap-to-select makes tap–tap pairing work. |
-| 5 | **FreeCell** | Nearly always winnable; the puzzle-lover's game. Way of the Scholar's home. | All face-up; drag-heavy. |
+| 5 | **FreeCell** | Nearly always winnable; the puzzle-lover's game. | ✅ Shipped (2026-09-05). Supermoves sized by free cells and empty columns; option `cells` 4/3/2. |
 | 6 | **Spider** (1/2/4 suits) | Long, meditative, 104 cards. Only after Ascension logic handles >52. | Two decks = two of every generator; design later. |
 
 Each game declares which Marks' rule-twists it honours. Charge/wake semantics are game-agnostic: any

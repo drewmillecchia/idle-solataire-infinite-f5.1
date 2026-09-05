@@ -188,3 +188,25 @@ export const NumberingLadderEntrySchema = z.object({
 export type NumberingLadderEntry = z.infer<typeof NumberingLadderEntrySchema>;
 
 export const NumberingLadderSchema = z.array(NumberingLadderEntrySchema);
+
+// ---- Economy (payout tunables; docs/02-game-design.md §2, §5, §10; CLAUDE.md invariant #9) ---
+
+export const EconomySchema = z.object({
+  $comment: z.string().optional(),
+  /** Win burst length in seconds of deckRate (docs/02 §2, §10). */
+  winBurstSeconds: z.number().positive(),
+  /** Multiplier applied to the win burst when the hand used an undo (docs/02 §10), 0..1. */
+  undoPenalty: z.number().min(0).max(1),
+  /** Seconds of deckRate paid when a card comes home again (docs/02 §2, §10). */
+  homeSparkSeconds: z.number().positive(),
+  /** Seconds of deckRate paid for a tableau move (docs/02 §2, §10). */
+  tableauSparkSeconds: z.number().positive(),
+  /** Floor every spark is clamped above. */
+  minSpark: z.number().positive(),
+  /** Way of the Gambler's roll range (docs/02 §5). */
+  gamblerRollMin: z.number().positive(),
+  gamblerRollMax: z.number().positive(),
+  /** Way of the Gambler's Mark fizzle chance (docs/02 §5), 0..1. */
+  gamblerFizzleChance: z.number().min(0).max(1)
+});
+export type Economy = z.infer<typeof EconomySchema>;

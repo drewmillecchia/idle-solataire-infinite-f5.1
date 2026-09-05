@@ -146,16 +146,19 @@ function repairNumberingList(value: unknown, fallback: NumberingId[]): Numbering
 }
 
 /**
- * Per-hand Mark scratch. Ranks outside 1..13 and non-integer card ids are dropped, and the
+ * Per-hand Mark scratch. Ranks outside 1..13 and non-integer card ids are dropped, the
  * Gambler's wager is clamped into [ROLL_MIN, ROLL_MAX] so a hand-edited save cannot mint a x1e9
- * burst (invariant #10: repair, never throw).
+ * burst, `seed` falls back to 0 (the next `dealHand` overwrites it anyway), and `fizzleSeq` is a
+ * non-negative integer (invariant #10: repair, never throw).
  */
 function repairHand(value: unknown, fallback: HandState): HandState {
   if (!isRecord(value)) {
     return {
       echoRanks: [...fallback.echoRanks],
       homedThisHand: [...fallback.homedThisHand],
-      roll: fallback.roll
+      roll: fallback.roll,
+      seed: fallback.seed,
+      fizzleSeq: fallback.fizzleSeq
     };
   }
   const ranks = Array.isArray(value.echoRanks) ? value.echoRanks : [];
@@ -164,7 +167,9 @@ function repairHand(value: unknown, fallback: HandState): HandState {
   return {
     echoRanks: ranks.filter((r): r is number => typeof r === 'number' && Number.isInteger(r) && r >= 1 && r <= 13),
     homedThisHand: homed.filter((c): c is number => typeof c === 'number' && Number.isInteger(c) && c >= 0 && c < 52),
-    roll: Math.min(ROLL_MAX, Math.max(ROLL_MIN, rawRoll))
+    roll: Math.min(ROLL_MAX, Math.max(ROLL_MIN, rawRoll)),
+    seed: toNum(value.seed, fallback.seed),
+    fizzleSeq: Math.max(0, Math.floor(toNum(value.fizzleSeq, fallback.fizzleSeq)))
   };
 }
 

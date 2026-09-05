@@ -16,12 +16,14 @@ import {
   markSlots,
   placeMark,
   removeMark,
+  TRIGGER_MARKS,
   usedSlots
 } from '$engine/marks/index';
 import { D } from '$engine/numbers';
+import { mulberry32 } from '$engine/rng';
 import { deserialize, serialize } from '$engine/save/serialize';
 import { migrate } from '$engine/save/migrate';
-import { MARKS } from '$content/index';
+import { ECONOMY, MARKS } from '$content/index';
 import { MarksSchema } from '$content/schemas';
 import marksJson from '$content/marks.json';
 
@@ -477,7 +479,7 @@ describe('Anchor', () => {
     expect(state.cards[0]?.charge).toBe(0);
     // The placement itself survives the Cut, and so does the per-hand scratch's reset.
     expect(state.marks.placed).toEqual([{ mark: 'anchor', cards: [HK] }]);
-    expect(state.run.hand).toEqual({ echoRanks: [], homedThisHand: [], roll: 1 });
+    expect(state.run.hand).toEqual({ echoRanks: [], homedThisHand: [], roll: 1, seed: 0, fizzleSeq: 0 });
   });
 });
 
@@ -489,11 +491,11 @@ describe('save v4', () => {
     const { bus } = withBus();
     place(state, bus, 'twin', [SA, HK]);
     place(state, bus, 'lantern', [D3]);
-    state.run.hand = { echoRanks: [5, 9], homedThisHand: [SA], roll: 1 };
+    state.run.hand = { echoRanks: [5, 9], homedThisHand: [SA], roll: 1, seed: 7, fizzleSeq: 2 };
 
     const restored = deserialize(serialize(state));
     expect(restored.version).toBe(SAVE_VERSION);
-    expect(SAVE_VERSION).toBe(4);
+    expect(SAVE_VERSION).toBe(5);
     expect(restored.marks.placed).toEqual([
       { mark: 'twin', cards: [SA, HK] },
       { mark: 'lantern', cards: [D3] }
@@ -501,7 +503,7 @@ describe('save v4', () => {
     expect(restored.cards[SA]?.marks).toEqual(['twin']);
     expect(restored.cards[HK]?.marks).toEqual(['twin']);
     expect(restored.cards[D3]?.marks).toEqual(['lantern']);
-    expect(restored.run.hand).toEqual({ echoRanks: [5, 9], homedThisHand: [SA], roll: 1 });
+    expect(restored.run.hand).toEqual({ echoRanks: [5, 9], homedThisHand: [SA], roll: 1, seed: 7, fizzleSeq: 2 });
   });
 
   it('migrates v2 -> v3 with empty marks and an empty hand', () => {
@@ -522,7 +524,7 @@ describe('save v4', () => {
     const restored = deserialize(v2json);
     expect(restored.version).toBe(SAVE_VERSION);
     expect(restored.marks.placed).toEqual([]);
-    expect(restored.run.hand).toEqual({ echoRanks: [], homedThisHand: [], roll: 1 });
+    expect(restored.run.hand).toEqual({ echoRanks: [], homedThisHand: [], roll: 1, seed: 0, fizzleSeq: 0 });
   });
 
   it('repairs garbage marks without throwing or losing the rest of the save', () => {
@@ -551,7 +553,7 @@ describe('save v4', () => {
     expect(state.marks.placed).toEqual([{ mark: 'kindling', cards: [7] }]);
     expect(state.cards[7]?.marks).toEqual(['kindling']);
     expect(state.cards[1]?.marks).toEqual([]);
-    expect(state.run.hand).toEqual({ echoRanks: [5], homedThisHand: [3], roll: 1 });
+    expect(state.run.hand).toEqual({ echoRanks: [5], homedThisHand: [3], roll: 1, seed: 0, fizzleSeq: 0 });
   });
 
   it('survives marks that are not even an object', () => {
@@ -560,5 +562,193 @@ describe('save v4', () => {
       expect(state.marks.placed).toEqual([]);
       expect(state.cards).toHaveLength(52);
     }
+  });
+});
+
+// ---- Gambler Mark fizzle (docs/02-game-design.md 5) ---------------------------------------
+
+function firstSeedWhere(predicate: (u: number) => boolean): number {
+  for (let s = 0; s < 100_000; s++) {
+    if (predicate(mulberry32(s)())) return s;
+  }
+  throw new Error('no seed found in range');
+}
+
+/** A guaranteed-to-fizzle seed: `rollFizzle` reads `mulberry32(hand.seed ^ 0)()` on the first opportunity. */
+function firstFizzleSeed(): number {
+  return firstSeedWhere((u) => u < ECONOMY.gamblerFizzleChance);
+}
+
+/** A guaranteed-NOT-to-fizzle seed, same reasoning. */
+function firstNonFizzleSeed(): number {
+  return firstSeedWhere((u) => u >= ECONOMY.gamblerFizzleChance);
+}
+
+/** A Heavy card in the Gambler, dealt with `seed`, ready for repeated `card-moved` opportunities. */
+function heavyGamblerState(seed: number): { state: GameState; bus: EventBus; events: GameEvent[] } {
+  const state = markState();
+  const { bus, events } = withBus();
+  attachMarks(state, bus);
+  expect(place(state, bus, 'heavy', [S7])).toBe(true);
+  state.run.way = 'gambler';
+  state.prestige.waysUnlocked.push('gambler');
+  dealHand(state, bus, 'klondike', seed);
+  events.length = 0;
+  return { state, bus, events };
+}
+
+function moveS7(bus: EventBus): void {
+  bus.emit({ type: 'card-moved', card: S7, from: 'tableau-1', to: 'tableau-2' });
+}
+
+describe('Gambler Mark fizzle', () => {
+  it('is a trigger-mark-only concept: exactly echo, kindling, twin, heavy', () => {
+    expect(TRIGGER_MARKS.slice().sort()).toEqual(['echo', 'heavy', 'kindling', 'twin']);
+  });
+
+  it('is deterministic: the same hand seed reproduces the same fizzle sequence exactly', () => {
+    function runSequence(seed: number): boolean[] {
+      const { bus, events } = heavyGamblerState(seed);
+      const out: boolean[] = [];
+      for (let i = 0; i < 50; i++) {
+        events.length = 0;
+        moveS7(bus);
+        const fired = events.find((e) => e.type === 'mark-fired');
+        out.push(fired?.type === 'mark-fired' ? Boolean(fired.fizzled) : false);
+      }
+      return out;
+    }
+    const a = runSequence(123);
+    const b = runSequence(123);
+    expect(a).toEqual(b);
+    // The 50-opportunity run should exercise both a fizzle and a real fire, or the test proves nothing.
+    expect(a.some(Boolean)).toBe(true);
+    expect(a.some((x) => !x)).toBe(true);
+  });
+
+  it('a different hand seed gives a different fizzle sequence', () => {
+    function runSequence(seed: number): boolean[] {
+      const { bus, events } = heavyGamblerState(seed);
+      const out: boolean[] = [];
+      for (let i = 0; i < 50; i++) {
+        events.length = 0;
+        moveS7(bus);
+        const fired = events.find((e) => e.type === 'mark-fired');
+        out.push(fired?.type === 'mark-fired' ? Boolean(fired.fizzled) : false);
+      }
+      return out;
+    }
+    expect(runSequence(1)).not.toEqual(runSequence(2));
+  });
+
+  it('fizzles about 10% of the time over 200 deterministic trigger opportunities (within 0.05)', () => {
+    const { state, bus, events } = heavyGamblerState(999);
+    let fizzles = 0;
+    for (let i = 0; i < 200; i++) {
+      events.length = 0;
+      moveS7(bus);
+      const fired = events.find((e) => e.type === 'mark-fired');
+      if (fired?.type === 'mark-fired' && fired.fizzled) fizzles++;
+    }
+    expect(state.run.hand.fizzleSeq).toBe(200);
+    const rate = fizzles / 200;
+    expect(Math.abs(rate - ECONOMY.gamblerFizzleChance)).toBeLessThan(0.05);
+  });
+
+  it('a fizzled mark emits fizzled: true, and applies no charge', () => {
+    const seed = firstFizzleSeed();
+    const { state, bus, events } = heavyGamblerState(seed);
+    const before = state.cards[S7]?.charge ?? 0;
+    moveS7(bus);
+    expect(events.filter((e) => e.type === 'mark-fired')).toEqual([
+      { type: 'mark-fired', mark: 'heavy', card: S7, depth: 0, fizzled: true }
+    ]);
+    expect(events.some((e) => e.type === 'charge-gained')).toBe(false);
+    expect(state.cards[S7]?.charge).toBe(before);
+  });
+
+  it('a non-fizzled mark fires exactly as before, with no fizzled field', () => {
+    const seed = firstNonFizzleSeed();
+    const { state, bus, events } = heavyGamblerState(seed);
+    const before = state.cards[S7]?.charge ?? 0;
+    moveS7(bus);
+    const fired = events.find((e) => e.type === 'mark-fired');
+    expect(fired).toEqual({ type: 'mark-fired', mark: 'heavy', card: S7, depth: 0 });
+    expect(state.cards[S7]?.charge).toBe(before + 1);
+  });
+
+  it('outside the Gambler, nothing ever fizzles', () => {
+    for (const way of ['none', 'hand', 'dealer', 'scholar'] as const) {
+      const state = markState();
+      const { bus, events } = withBus();
+      attachMarks(state, bus);
+      expect(place(state, bus, 'heavy', [S7])).toBe(true);
+      state.run.way = way;
+      dealHand(state, bus, 'klondike', 42);
+      events.length = 0;
+
+      for (let i = 0; i < 200; i++) moveS7(bus);
+
+      const fired = events.filter((e) => e.type === 'mark-fired');
+      expect(fired).toHaveLength(200);
+      expect(fired.every((e) => e.type === 'mark-fired' && !e.fizzled)).toBe(true);
+      expect(state.cards[S7]?.charge).toBe(200);
+    }
+  });
+
+  it('leaves passives (Lantern) and twists (unlock list) unaffected in the Gambler', () => {
+    const state = markState();
+    const { bus } = withBus();
+    wake(state, D3, 2);
+    wake(state, D9, 2);
+    const base = derive(state);
+    const baseD9 = base.perCard[D9] ?? D(0);
+    expect(place(state, bus, 'lantern', [D3])).toBe(true);
+    state.run.way = 'gambler';
+
+    const lit = derive(state);
+    expect((lit.perCard[D9] ?? D(0)).div(baseD9).toNumber()).toBeCloseTo(1.5, 10);
+    // Twists are not events at all; the interpreter never touches them, fizzle or not.
+    expect(MARKS.filter((m) => m.kind === 'twist').map((m) => m.id).sort()).toEqual(['glass', 'mirror', 'wild']);
+  });
+});
+
+// ---- save v5 (Gambler Mark fizzle: run.hand.seed, run.hand.fizzleSeq) ----------------------
+
+describe('save v5', () => {
+  it('migrates a v4 save: fills seed and fizzleSeq defensively', () => {
+    const state = markState();
+    dealHand(state, new EventBus(), 'klondike', 55);
+    const raw = JSON.parse(serialize(state)) as Record<string, unknown>;
+    raw.version = 4;
+    const run = raw.run as Record<string, unknown>;
+    const hand = run.hand as Record<string, unknown>;
+    delete hand.seed;
+    delete hand.fizzleSeq;
+
+    const migrated = migrate(raw) as Record<string, unknown>;
+    expect(migrated.version).toBe(5);
+    const migratedHand = (migrated.run as Record<string, unknown>).hand as Record<string, unknown>;
+    expect(migratedHand.seed).toBe(0);
+    expect(migratedHand.fizzleSeq).toBe(0);
+
+    const restored = deserialize(JSON.stringify(raw));
+    expect(restored.version).toBe(SAVE_VERSION);
+    expect(restored.run.hand.seed).toBe(0);
+    expect(restored.run.hand.fizzleSeq).toBe(0);
+  });
+
+  it('a v4 save string (predating seed/fizzleSeq entirely) still loads', () => {
+    const raw = {
+      version: 4,
+      run: { way: 'gambler', hand: { echoRanks: [], homedThisHand: [], roll: 1.4 } }
+    };
+    expect(() => deserialize(JSON.stringify(raw))).not.toThrow();
+    const state = deserialize(JSON.stringify(raw));
+    expect(state.version).toBe(SAVE_VERSION);
+    expect(state.cards).toHaveLength(52);
+    expect(state.run.hand.seed).toBe(0);
+    expect(state.run.hand.fizzleSeq).toBe(0);
+    expect(state.run.hand.roll).toBeCloseTo(1.4, 9);
   });
 });

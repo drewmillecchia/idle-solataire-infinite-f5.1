@@ -6,7 +6,7 @@ import { D } from './numbers';
 import type { CardId, CardState, NumberingId, WayId } from './types';
 
 /** Bump on any state-shape change; add a matching branch in save/migrate.ts. */
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
 /** Per-hand scratch for the Marks that only reach across one hand. Reset by `dealHand`. */
 export interface HandState {
@@ -20,6 +20,14 @@ export interface HandState {
    * else, so a state that never met the Gambler behaves exactly as before.
    */
   roll: number;
+  /** The deal seed `dealHand` was given. Feeds the Gambler's Mark fizzle (docs/02 §5). */
+  seed: number;
+  /**
+   * Counter incremented on every trigger-mark opportunity this hand, whether or not it fizzles.
+   * `marks/interpret.ts` mixes it with `seed` into `mulberry32` so a fizzle is deterministic and
+   * a replay of the same events fizzles the same way — never `Math.random()`.
+   */
+  fizzleSeq: number;
 }
 
 export interface RunState {
@@ -139,7 +147,7 @@ export function createInitialState(now: number): GameState {
       handsWon: 0,
       homedThisRun: 0,
       undosThisHand: 0,
-      hand: { echoRanks: [], homedThisHand: [], roll: 1 }
+      hand: { echoRanks: [], homedThisHand: [], roll: 1, seed: 0, fizzleSeq: 0 }
     },
     prestige: {
       cuts: D(0),

@@ -4,6 +4,7 @@
 import Decimal from 'break_eternity.js';
 import { D } from '../numbers';
 import { derive } from './derive';
+import { ECONOMY } from '$content/index';
 import type { EventBus } from '../events';
 import type { CardId } from '../types';
 import type { GameState } from '../state';
@@ -22,10 +23,10 @@ export function spark(state: GameState, bus: EventBus, amount: Decimal, anchor?:
   }
 }
 
-/** The spark a home play pays: a quarter-second of the deck, floored at one. */
+/** The spark a home play pays: a quarter-second of the deck, floored at `ECONOMY.minSpark`. */
 export function homeSpark(state: GameState): Decimal {
   const d = derive(state);
-  return Decimal.max(d.deckRate.times(0.25).times(d.sparkMult), 1);
+  return Decimal.max(d.deckRate.times(ECONOMY.homeSparkSeconds).times(d.sparkMult), ECONOMY.minSpark);
 }
 
 /**
@@ -87,5 +88,10 @@ export function homeCard(state: GameState, bus: EventBus, card: CardId, pile: st
 /** A tableau move (not home) — a tiny one-off acknowledgement so every move feels felt. */
 export function tableauSpark(state: GameState, bus: EventBus, anchor?: CardId): void {
   const d = derive(state);
-  spark(state, bus, Decimal.max(d.deckRate.times(0.05).times(d.sparkMult), 1), anchor);
+  spark(
+    state,
+    bus,
+    Decimal.max(d.deckRate.times(ECONOMY.tableauSparkSeconds).times(d.sparkMult), ECONOMY.minSpark),
+    anchor
+  );
 }

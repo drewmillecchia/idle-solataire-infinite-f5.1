@@ -55,7 +55,9 @@ back. Feel notes go in `memory/tuning-log.md`; bugs go straight into the convers
   three layers (paper, edge click, felt thud) and shift pitch per card.
 - **Keyboard and screen reader**: press Tab on load for a skip link into an off-canvas set of move
   controls; `n` new hand, `u` undo, `d` draw, `?` shortcuts.
-- **Golf and Pyramid** in Settings → Game.
+- **Every game** is one click away: the game's name in the bottom-left opens a picker with a line
+  about each. Rule options (draw one or three, redeals, free cells) stay in Settings.
+- **Hint** in the footer glows a move it would make, without making it. Free and unlimited.
 
 ## Known gaps (do not report)
 No sound *samples* yet (everything is synthesised); no Ascension; Golf and Pyramid have had no feel

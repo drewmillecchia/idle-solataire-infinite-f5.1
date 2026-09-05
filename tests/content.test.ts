@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import Decimal from 'break_eternity.js';
-import { FEEL, MILESTONES, UPGRADES } from '$content/index';
-import { UpgradesSchema, MilestonesSchema } from '$content/schemas';
+import { ECONOMY, FEEL, MILESTONES, UPGRADES } from '$content/index';
+import { EconomySchema, UpgradesSchema, MilestonesSchema } from '$content/schemas';
 import upgradesJson from '$content/upgrades.json';
 import milestonesJson from '$content/milestones.json';
+import economyJson from '$content/economy.json';
 
 describe('content loads and validates at import time', () => {
   it('FEEL is already validated (existing content)', () => {
@@ -18,6 +19,29 @@ describe('content loads and validates at import time', () => {
   it('MILESTONES parses via its schema and is non-empty', () => {
     expect(() => MilestonesSchema.parse(milestonesJson)).not.toThrow();
     expect(MILESTONES.length).toBeGreaterThanOrEqual(10);
+  });
+
+  it('ECONOMY parses via its schema', () => {
+    expect(() => EconomySchema.parse(economyJson)).not.toThrow();
+  });
+});
+
+describe('economy content (invariant #9: tunables live in content JSON)', () => {
+  it('matches the literals the code used before this moved to content (behaviour-preserving)', () => {
+    expect(ECONOMY.winBurstSeconds).toBe(60);
+    expect(ECONOMY.undoPenalty).toBe(0.7);
+    expect(ECONOMY.homeSparkSeconds).toBe(0.25);
+    expect(ECONOMY.tableauSparkSeconds).toBe(0.05);
+    expect(ECONOMY.minSpark).toBe(1);
+    expect(ECONOMY.gamblerRollMin).toBe(0.5);
+    expect(ECONOMY.gamblerRollMax).toBe(3);
+    expect(ECONOMY.gamblerFizzleChance).toBe(0.1);
+  });
+
+  it('rejects a malformed entry (schema fails loudly, invariant #11)', () => {
+    expect(() => EconomySchema.parse({ ...economyJson, undoPenalty: 1.5 })).toThrow();
+    expect(() => EconomySchema.parse({ ...economyJson, gamblerFizzleChance: -0.1 })).toThrow();
+    expect(() => EconomySchema.parse({ ...economyJson, winBurstSeconds: 0 })).toThrow();
   });
 });
 

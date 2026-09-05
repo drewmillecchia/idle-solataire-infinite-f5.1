@@ -11,9 +11,17 @@
  *
  * `mark-fired` is emitted BEFORE the mark's effects, carrying the depth of the event that fired it,
  * so a presenter sees the mark light up and then the consequences arrive.
+ *
+ * FIZZLE. Way of the Gambler (docs/02-game-design.md §5): a trigger mark (echo, kindling, twin,
+ * heavy — never a passive or a twist, which are not events) misfires `ECONOMY.gamblerFizzleChance`
+ * of the time. The roll is deterministic, not `Math.random()`: `rollFizzle` mixes the hand's own
+ * deal seed with `fizzleSeq`, a counter bumped on every trigger-mark opportunity, into `mulberry32`
+ * — so replaying the same events against the same hand seed fizzles exactly the same way. A
+ * fizzle emits `mark-fired` with `fizzled: true` and applies none of the mark's effects.
  */
-import { MARKS } from '$content/index';
+import { ECONOMY, MARKS } from '$content/index';
 import { chargeCard, homeSpark, spark, wakeCard } from '../economy/cards';
+import { mulberry32 } from '../rng';
 import { cardDef, cardId } from '../types';
 import type { CardId, Rank } from '../types';
 import type { EventBus } from '../events';
@@ -29,14 +37,35 @@ const TWIN_DEPTH_CAP = 2;
 function handState(state: GameState): HandState {
   const hand = state.run.hand;
   if (!hand || !Array.isArray(hand.echoRanks) || !Array.isArray(hand.homedThisHand)) {
-    state.run.hand = { echoRanks: [], homedThisHand: [], roll: 1 };
+    state.run.hand = { echoRanks: [], homedThisHand: [], roll: 1, seed: 0, fizzleSeq: 0 };
     return state.run.hand;
   }
+  if (typeof hand.seed !== 'number') hand.seed = 0;
+  if (typeof hand.fizzleSeq !== 'number') hand.fizzleSeq = 0;
   return hand;
 }
 
-function fired(bus: EventBus, mark: string, card: CardId, depth: number): void {
-  bus.emit({ type: 'mark-fired', mark, card, depth });
+/**
+ * Rolls this trigger-mark opportunity's fizzle, deterministically from the hand seed and a
+ * counter that advances every time this is called — win or fizzle, Gambler or not, so the
+ * sequence a hand produces never depends on which Way is active. Outside Way of the Gambler this
+ * always returns false (invariant: nothing ever fizzles anywhere else).
+ */
+function rollFizzle(state: GameState): boolean {
+  const hand = handState(state);
+  const seq = hand.fizzleSeq;
+  hand.fizzleSeq = seq + 1;
+  if (state.run.way !== 'gambler') return false;
+  const u = mulberry32((hand.seed ^ seq) >>> 0)();
+  return u < ECONOMY.gamblerFizzleChance;
+}
+
+function fired(bus: EventBus, mark: string, card: CardId, depth: number, fizzled?: boolean): void {
+  if (fizzled) {
+    bus.emit({ type: 'mark-fired', mark, card, depth, fizzled: true });
+  } else {
+    bus.emit({ type: 'mark-fired', mark, card, depth });
+  }
 }
 
 /**
@@ -53,9 +82,13 @@ function onHome(state: GameState, bus: EventBus, card: CardId): void {
   const armed = hand.echoRanks.indexOf(rank);
   if (armed >= 0) {
     hand.echoRanks.splice(armed, 1);
-    fired(bus, 'echo', card, 0);
-    chargeCard(state, bus, card, 'mark', 1);
-    spark(state, bus, homeSpark(state), card);
+    if (rollFizzle(state)) {
+      fired(bus, 'echo', card, 0, true);
+    } else {
+      fired(bus, 'echo', card, 0);
+      chargeCard(state, bus, card, 'mark', 1);
+      spark(state, bus, homeSpark(state), card);
+    }
   }
 
   if (hasMark(state, card, 'echo')) hand.echoRanks.push(rank);
@@ -64,6 +97,10 @@ function onHome(state: GameState, bus: EventBus, card: CardId): void {
 /** Kindling: charge travels to the rank-neighbours in the same suit. */
 function onKindling(state: GameState, bus: EventBus, card: CardId, depth: number): void {
   if (!hasMark(state, card, 'kindling')) return;
+  if (rollFizzle(state)) {
+    fired(bus, 'kindling', card, depth, true);
+    return;
+  }
   const { suit, rank } = cardDef(card);
   fired(bus, 'kindling', card, depth);
   for (const r of [rank - 1, rank + 1]) {
@@ -84,6 +121,10 @@ function onTwin(state: GameState, bus: EventBus, card: CardId, depth: number): v
   const partner = placed.cards.find((c) => c !== card);
   if (partner === undefined) return;
 
+  if (rollFizzle(state)) {
+    fired(bus, 'twin', card, depth, true);
+    return;
+  }
   fired(bus, 'twin', card, depth);
   if (state.cards[partner]?.awake) {
     chargeCard(state, bus, partner, 'mark', depth + 1);
@@ -95,6 +136,10 @@ function onTwin(state: GameState, bus: EventBus, card: CardId, depth: number): v
 /** Heavy: a tableau move charges the card. Never a wake — Heavy cannot start a generator. */
 function onMoved(state: GameState, bus: EventBus, card: CardId, depth: number): void {
   if (!hasMark(state, card, 'heavy')) return;
+  if (rollFizzle(state)) {
+    fired(bus, 'heavy', card, depth, true);
+    return;
+  }
   fired(bus, 'heavy', card, depth);
   chargeCard(state, bus, card, 'mark', depth + 1);
 }

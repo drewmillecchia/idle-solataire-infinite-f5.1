@@ -1,0 +1,11 @@
+{
+  "$comment": "Payout tunables (docs/02-game-design.md §2, §5, §10). See CLAUDE.md invariant #9.",
+  "winBurstSeconds": 60,
+  "undoPenalty": 0.7,
+  "homeSparkSeconds": 0.25,
+  "tableauSparkSeconds": 0.05,
+  "minSpark": 1,
+  "gamblerRollMin": 0.5,
+  "gamblerRollMax": 3,
+  "gamblerFizzleChance": 0.1
+}

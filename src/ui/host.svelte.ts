@@ -670,6 +670,25 @@ export class GameHost implements TableHost {
   }
 
   // Economy UI -------------------------------------------------------------
+  /**
+   * Show a move rather than make one: the same greedy driver the Auto-Dealer uses, surfaced through
+   * the table's telegraph. Free and unlimited — this is a game people play to relax.
+   */
+  hint(): void {
+    if (this.cutting) return;
+    const mv = nextMove(this.module, this.board, this.twists(), new Set());
+    if (!mv) {
+      this.toast(this.module.isWon(this.board) ? 'The hand is already won.' : 'Nothing left here. Deal again.');
+      sound('tick', 0.2);
+      return;
+    }
+    if (mv.kind === 'draw') this.table?.hint('stock', 0, null);
+    else this.table?.hint(mv.pile, mv.index, mv.to);
+    sound('pick', 0.35);
+    haptic('tick');
+    setTimeout(() => this.table?.clearHint(), 2200);
+  }
+
   buy(id: string, count = 1): void {
     this.slowDirty = true;
     if (buyUpgrade(this.state, this.bus, id, count)) { this.derived = derive(this.state); sound('tick', 0.5); haptic('tick'); this.pushView(); }
@@ -720,7 +739,11 @@ export class GameHost implements TableHost {
         if (e.feature === 'cut') { this.toast('The lamp is bright enough to cut the deck.'); this.sound('chime', 0.5); }
         else if (e.feature.startsWith('mark:')) { const m = markDef(e.feature.slice(5)); if (m) this.toast(`A Mark is yours to place: ${m.name}.`); }
         break;
-      case 'mark-fired': this.sound('tick', 0.6); this.derived = derive(this.state); break;
+      case 'mark-fired':
+        // A Gambler's mark that misfires gets the soft muted thump, not the bright tick.
+        if (e.fizzled) this.sound('error', 0.5);
+        else { this.sound('tick', 0.6); this.derived = derive(this.state); }
+        break;
       case 'reshuffle': this.ledger.unshift({ id: `reshuffle-${this.state.prestige.reshuffles}`, text: `Reshuffle ${this.state.prestige.reshuffles}. Every cut, traded for a new shape of value.`, at: Date.now() }); break;
       case 'cut': this.ledger.unshift({ id: `cut-${this.state.prestige.cutsPerformed}`, text: `Cut ${this.state.prestige.cutsPerformed}. The deck forgets; the Keeper does not.`, at: Date.now() }); break;
       case 'charge-gained': case 'card-home': this.derived = derive(this.state); break;

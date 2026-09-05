@@ -4,6 +4,7 @@ import milestonesJson from './milestones.json';
 import constellationJson from './constellation.json';
 import marksJson from './marks.json';
 import numberingJson from './numbering.json';
+import economyJson from './economy.json';
 import {
   FeelSchema,
   type Feel,
@@ -20,7 +21,9 @@ import {
   MarksSchema,
   type MarkDef,
   NumberingLadderSchema,
-  type NumberingLadderEntry
+  type NumberingLadderEntry,
+  EconomySchema,
+  type Economy
 } from './schemas';
 
 /** Validated at module load: a malformed entry fails loudly (ADR-008). */
@@ -30,6 +33,8 @@ export const MILESTONES: MilestoneDef[] = MilestonesSchema.parse(milestonesJson)
 export const CONSTELLATION: ConstellationNodeDef[] = ConstellationSchema.parse(constellationJson);
 export const MARKS: MarkDef[] = MarksSchema.parse(marksJson);
 export const NUMBERING_LADDER: NumberingLadderEntry[] = NumberingLadderSchema.parse(numberingJson);
+/** Payout tunables (CLAUDE.md invariant #9): docs/02-game-design.md §2, §5, §10. */
+export const ECONOMY: Economy = EconomySchema.parse(economyJson);
 export type {
   Feel,
   UpgradeDef,
@@ -40,5 +45,6 @@ export type {
   ConstellationEffect,
   ConstellationBranch,
   MarkDef,
-  NumberingLadderEntry
+  NumberingLadderEntry,
+  Economy
 };

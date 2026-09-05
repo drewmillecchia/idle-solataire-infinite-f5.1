@@ -59,7 +59,8 @@ export type GameEvent =
   | { type: 'reveal'; feature: string }
   | { type: 'cut'; cuts: Decimal; way: WayId }
   | { type: 'reshuffle'; permutations: Decimal }
-  | { type: 'mark-fired'; mark: string; card: CardId; depth: number }
+  /** `fizzled` is set only by Way of the Gambler's Mark fizzle (docs/02 §5); absent everywhere else. */
+  | { type: 'mark-fired'; mark: string; card: CardId; depth: number; fizzled?: boolean }
   | { type: 'purchase'; id: string; count: number };
 
 export type EventListener = (e: GameEvent) => void;
