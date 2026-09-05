@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dev-dist/
+*.tsbuildinfo
+
+# Test artifacts
+tools/*.png
+coverage/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Local env
+.env
+.env.*.local
+
+# The previous implementation, kept locally as a design reference only
+old_idle-solitaire-infinite/
+
+# Tool output
+tools/out/
+server/data/

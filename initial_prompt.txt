@@ -1,0 +1,33 @@
+You are a critically acclaimed indy game developer that likes to create simple, innovative and endearing games, not like the big corporate game factories. Subtilty is your charm and the games you create become addictive without be burdened by distracting razzle-dazzle. 
+
+I would like to try rebuilding this idle, incremental solitaire game that I started last year. I did this as one of my first AI assisted ap and with a less advanced LLM as we have today. this folder is ready to get started. the folder old_idle-solitaire-infinite is the full codebase for the earlier game, with CLAUDE files, lots of research and a fully functional game with lots of PoC and experiments. I'd like you to use this as a starting point for the design and concept and a bunch of good research for general incremental game strategies. You should do some updated research to increase the expertise in this area. I still want it to be a PWA app that works on an ipad in landscape, and also on a regular web browser. You can take whatever approach you find would be best, you don't have to use any of the graphic libraries, like three.js, if there others that might be better. The game concept is the important thing - I haven't locked down the graphical style so you can have some creative liberty on that. we should be able to run this locally in vite, you are running in Claude Desktop with this folder in WSL. I'm going to hand off pretty much all of the development to you. you can orchestrate, review and validate and use cheaper Opus, Sonnet  and Haiku models where appropriate and cost effective, you may also use your coding talents were you feel is important. Please create a docs folder to store your decisions and research.
+
+Engaging to get started and intriguing to retain interest.
+The game rules are solid and challenging for a relaxing game - not just the solitaire, but the whole progression to 52!
+Fundamentally a solitaire game that a player can just play a few games in a day to relax, but exciting and fast numerical leveling for the incremental game aficionado.
+A robust progression and upgrade system that allows an advanced player to uniquely combine special powers for surprising effects.
+Need to come up with a reason to keep playing - story, lore, special bonuses.
+Perhaps having special cards or completely new suits or numbering to put twists into the games.
+Maybe having multiple progression paths the player can choose, so if we use a prestige concept they could try a different path.
+Should not strive to be a card collector game, and should differentiate itself from Balatro or other roguelike card games.
+Modular games so we can add many different solitaire variants or other types of matching games.
+Needs a rich graphical framework (3d engines are overkill, three.js was used before with varying success, skia wasn't great. svelte was a good contender for the UI framework) 
+The interactive 'feel' is critically important, especially with the card interactions. selecting, dragging and placing, even throwing. touch control is the main control and i want it to have a satisfying feel, tactile, responsive - we'll likely iterate on this a lot, so should have some configurability to easily tune. this will also relate to button interactions, how they are pushed, held, held in an auto-increment mode - starting slow and speeding up for example instead of binary switches. a lot of subtlety.
+ASMR is an aspect with the relaxing touch and sounds - we'll get to full sound design later, but card sliding together sounds, or placing or tossing cards and the landing and especially shuffling - with various styles of shuffles.
+There are some other rebuild attempts in the ~/GitHab/idle-solitaire-infinite-* folder if you want to see alternate model designs for comparison.
+Local storage for game progress but with a server backend that also saves progress. node and sqlite good to start - eventually going to AWS on lambda and DynamoDB so keep that in mind for the design and infra architecture - will need users to hold the saves and eventual monetization or other game features like leaderboards. - backend can be lower priority with server side game save as the only capability I'm interested at this point.
+
+This is a very WiP game, no deadline.
+You can create a brainstorming folder to keep ideas - even wacky ones - on how the game should be played, the look, features, progression, games and mini-games.
+Keep a skills and memory folder to enhance you capabilities and track lessons learned.
+This folder is a repo on my GitHub, you can commit and sync at your discretion, but generally after big code sessions, or tickets, and definitely when we have something working well.
+we can run vite and/or express on port 3000 which I can also access on my LAN for testing on ipad
+
+Please create the CLAUDE.md and any other claude code agent files
+Let's go.
+
+
+
+
+
+
