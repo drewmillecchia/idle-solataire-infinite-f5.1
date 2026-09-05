@@ -31,7 +31,7 @@ export interface TableHost {
   /** Feedback hooks for presenters. velocity 0..1. */
   sound(name: string, velocity: number): void;
   haptic(name: string): void;
-  generator(id: CardId): { awake: boolean; charge: number };
+  generator(id: CardId): { awake: boolean; charge: number; glyph?: string | undefined };
 }
 
 interface Drag {
@@ -257,7 +257,7 @@ export class Table {
           sp = this.sprites.get(c.id) ?? this.makeSprite(c.id);
           seen.add(c.id);
           const g = this.host.generator(c.id);
-          sp.setGenerator(g.awake, g.charge);
+          sp.setGenerator(g.awake, g.charge, g.glyph ?? '');
         }
         sp.pile = pile.id;
         sp.index = i;

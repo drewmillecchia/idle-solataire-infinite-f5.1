@@ -70,6 +70,7 @@ export interface View {
     ways: { id: WayId; name: string; mood: string; blurb: string; mechanics: string; unlocked: boolean }[];
     cutting: boolean;
   };
+  deck: { awake: boolean; charge: number; glyph?: string | undefined; selected: boolean }[];
   constellation: { id: string; name: string; blurb: string; branch: string; level: number; max: number; cost: string; affordable: boolean; effect: string }[];
   gameId: string;
   gameName: string;
@@ -311,10 +312,18 @@ export class GameHost implements TableHost {
   }
   sound(name: string, velocity: number): void { if (this.state.settings.sound) sound(name, velocity); }
   haptic(name: string): void { if (this.state.settings.haptics) haptic(name); }
-  generator(id: CardId): { awake: boolean; charge: number } {
+  generator(id: CardId): { awake: boolean; charge: number; glyph?: string | undefined } {
     const c = this.state.cards[id];
-    return c ? { awake: c.awake, charge: c.charge } : { awake: false, charge: 0 };
+    return c ? { awake: c.awake, charge: c.charge, glyph: this.glyphFor(c.marks) } : { awake: false, charge: 0 };
   }
+  selectedCards: CardId[] = [];
+  /** Tap on a card in the deck spread. Selection drives Mark placement (M4). */
+  tapDeckCard(id: CardId): void {
+    this.selectedCards = this.selectedCards.includes(id) ? this.selectedCards.filter((x) => x !== id) : [...this.selectedCards, id].slice(-2);
+    this.pushView();
+  }
+  /** Mark glyph lookup; filled in when the Marks content lands (M4). */
+  glyphFor(_marks: string[]): string | undefined { return undefined; }
 
   // Auto-Dealer -----------------------------------------------------------
   dealerEnabled = true;
@@ -436,6 +445,7 @@ export class GameHost implements TableHost {
       nextMilestoneLabel: '', nextMilestoneProgress: 0, journey: 0, ledger: [], toasts: [], upgrades: [], offline: null, wonBanner: null, lastGesture: '',
       cut: { revealed: false, canCut: false, cutsOnCut: '0', progress: 0, potential: '0', runEarned: '0', threshold: '0', cuts: '0', lifetimeCuts: '0', cutsPerformed: 0, way: 'none', ways: [], cutting: false },
       constellation: [],
+      deck: [],
       gameId: 'klondike', gameName: 'Klondike', games: [], gameOptions: [], settings: { sound: true, haptics: true, reducedMotion: false, autoDealerDelaySeconds: 12, shuffleStyle: 'riffle' }
     };
   }
@@ -500,6 +510,7 @@ export class GameHost implements TableHost {
         ways: WAYS.map((w) => ({ ...w, unlocked: s.prestige.waysUnlocked.includes(w.id) })),
         cutting: this.cutting
       },
+      deck: s.cards.map((c, i) => ({ awake: c.awake, charge: c.charge, glyph: this.glyphFor(c.marks), selected: this.selectedCards.includes(i) })),
       constellation: visibleNodes(s).map((n) => ({
         id: n.id, name: n.name, blurb: n.blurb, branch: n.branch, level: nodeLevel(s, n.id), max: n.max,
         cost: formatNumber(nodeCost(s, n.id)), affordable: canBuyNode(s, n.id), effect: describeNode(n.effect)

@@ -1,4 +1,4 @@
-import { Container, Sprite, Texture, Graphics } from 'pixi.js';
+import { Container, Sprite, Texture, Graphics, Text } from 'pixi.js';
 import { Spring, Spring2, clamp } from './spring';
 import type { Feel } from '$content/index';
 import type { CardId } from '$engine/types';
@@ -21,6 +21,8 @@ export class CardSprite extends Container {
   private glow: Graphics;
   private awakeMark: Graphics;
   private chargeTicks: Graphics;
+  private markText: Text | null = null;
+  private markGlyph = '';
   private w = 0;
   private h = 0;
   faceUp = false;
@@ -72,6 +74,7 @@ export class CardSprite extends Container {
     this.glow.alpha = 0;
     this.awakeMark.clear().star(w * 0.36, -h * 0.42, 5, w * 0.035, w * 0.016).fill({ color: 0xc9a45c });
     this.redrawCharge();
+    this.layoutMark();
     this.hitArea = { contains: (x: number, y: number) => Math.abs(x) <= w / 2 && Math.abs(y) <= h / 2 };
   }
 
@@ -84,11 +87,29 @@ export class CardSprite extends Container {
     for (let i = 0; i < n; i++) g.roundRect(-total / 2 + i * (tw + gap), this.h / 2 - th * 2.4, tw, th, th / 2).fill({ color: 0xc9a45c, alpha: 0.9 });
   }
 
-  setGenerator(awake: boolean, charge: number): void {
+  setGenerator(awake: boolean, charge: number, glyph = ''): void {
+    if (glyph !== this.markGlyph) this.setMarkGlyph(glyph);
     if (awake === this.awake && charge === this.charge) return;
     this.awake = awake;
     this.charge = charge;
     this.redrawCharge();
+  }
+
+  /** A Mark's single ink glyph in the top-right corner (docs/09-art-direction.md). */
+  private setMarkGlyph(glyph: string): void {
+    this.markGlyph = glyph;
+    if (!glyph) { this.markText?.destroy(); this.markText = null; return; }
+    if (!this.markText) {
+      this.markText = new Text({ text: glyph, style: { fontFamily: 'Iowan Old Style, Palatino, Georgia, serif', fontSize: 24, fill: 0x2a2320 } });
+      this.markText.anchor.set(0.5);
+      this.addChild(this.markText);
+    } else this.markText.text = glyph;
+    this.layoutMark();
+  }
+  private layoutMark(): void {
+    if (!this.markText) return;
+    this.markText.style.fontSize = Math.max(10, this.w * 0.16);
+    this.markText.position.set(this.w * 0.36, -this.h * 0.3);
   }
 
   /** Immediately snap to a position (deal start, initial layout). */
@@ -127,6 +148,7 @@ export class CardSprite extends Container {
     this.back.visible = f < 0.5;
     this.awakeMark.visible = this.awake && f >= 0.5;
     this.chargeTicks.visible = this.charge > 0 && f >= 0.5;
+    if (this.markText) this.markText.visible = f >= 0.5;
     this.rotation = this.rot.value;
 
     const lift = clamp(this.lift.value, 0, 1.5);
