@@ -472,7 +472,11 @@ export class GameHost implements TableHost {
   // Events → presenters ------------------------------------------------------
   private onEvent(e: GameEvent): void {
     switch (e.type) {
-      case 'card-woken': this.sound('chime', 0.6); this.toast('A card wakes.'); break;
+      case 'card-woken':
+        this.sound('chime', 0.6);
+        // Words only for the first few wakes ever; after that the chime and the brass star carry it.
+        if (this.state.stats.totalHomed <= 3) this.toast('A card wakes. It will count for you from now on.');
+        break;
       case 'hand-won': this.sound('bloom', 0.8); this.haptic('success'); break;
       case 'milestone': {
         const m = MILESTONES.find((x) => x.id === e.id);
