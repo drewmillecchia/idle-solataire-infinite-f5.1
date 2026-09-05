@@ -35,7 +35,7 @@ non-obvious. Status is kept here and in `CLAUDE.md`.
   deck spread; rule-twist hook in Klondike (Wild, Mirror, Glass).
 - **Exit:** Twin + Kindling chain observable in a test and on screen; a Wild card is placeable anywhere.
 
-## M5 — The long game ✅ (2026-09-05; Scholar's solver-checked deals still open)
+## M5 — The long game ✅ (2026-09-05; Scholar's solver-checked deals landed the same day)
 - Reshuffle → Permutations; Numbering Systems ladder + selection; Mark slots from Permutations.
 - The 52! odometer (bigint Lehmer) + the sky filling in the window; milestone ledger entries.
 - Ways of the Gambler and the Scholar (with a Klondike solver worker for winnable deals).
@@ -55,7 +55,8 @@ non-obvious. Status is kept here and in `CLAUDE.md`.
 - ~~Golf, Pyramid~~ ✅ (2026-09-05); Idle Riffle toy; more shuffle styles.
 
 ## Later
-Ascension (Joker → Stars ★), FreeCell, Spider, real auth, leaderboards-that-matter, DynamoDB.
+Ascension (Joker → Stars ★), FreeCell, Spider, real auth, leaderboards-that-matter, DynamoDB store,
+Gambler Mark fizzle, Idle Riffle toy, sound design pass with samples, a hint that replays the Scholar's line.
 
 ## Build discipline
 - Engine before UI: every economy rule is a pure function with a test before a component reads it.
