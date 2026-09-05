@@ -16,6 +16,7 @@ folder is the *why*.
 | [08-roadmap.md](08-roadmap.md) | Milestones as vertical slices with exit checks. Status lives here. |
 | [09-art-direction.md](09-art-direction.md) | "Night Desk" visual language: palette, cards, type, motion, the window. |
 | [10-orchestration.md](10-orchestration.md) | How the AI dev team works: which model does what, review gates, commit policy. |
+| [11-playtest-guide.md](11-playtest-guide.md) | What to try on the iPad after each session and what to report. |
 
 Ideas that are not decisions live in [`../brainstorming/`](../brainstorming/). Lessons learned live in
 [`../memory/`](../memory/).
