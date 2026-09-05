@@ -11,10 +11,13 @@ import { buildCardTextures, destroyCardTextures, type CardTextures } from './car
 import { layoutBoard, rectDistance, type Layout } from './layout';
 import { clamp } from './spring';
 
-/** Event time in ms. Uses the native event's timestamp (accurate even when a frame ran long) with a fallback. */
-function stamp(e: FederatedPointerEvent): number {
-  const t = (e.nativeEvent as Event | undefined)?.timeStamp;
-  return typeof t === 'number' && t > 0 ? t : performance.now();
+/**
+ * Event time in ms. Deliberately `performance.now()` and NOT `nativeEvent.timeStamp`: touch events
+ * report timestamps on an inconsistent epoch (a synthetic iPad-style tap measured 953 ms when it
+ * lasted 60), which silently turned every touch tap into a rejected drag.
+ */
+function stamp(_e: FederatedPointerEvent): number {
+  return performance.now();
 }
 
 export interface TableHost {
@@ -774,7 +777,9 @@ export class Table {
     const v0 = this.releaseVelocity(d.samples);
     const speed0 = Math.hypot(v0.x, v0.y);
     this.lastGesture = { kind: 'none', speed: speed0, held, moved: d.moved };
-    if (!d.moved && held < this.feel.tapMaxMs) {
+    // A release that never moved is a tap. There is no competing gesture at this point, and duration
+    // is not trustworthy across platforms — resting a finger before lifting must still play the card.
+    if (!d.moved) {
       this.lastGesture.kind = 'tap';
       // Tap (or double-tap — both do the same thing).
       this.settle(d.sprites);
@@ -835,7 +840,7 @@ export class Table {
   private releaseVelocity(samples: { t: number; x: number; y: number }[]): { x: number; y: number } {
     if (samples.length < 2) return { x: 0, y: 0 };
     const a = samples[0]!, b = samples[samples.length - 1]!;
-    const dt = Math.max(0.008, (b.t - a.t) / 1000);
+    const dt = Math.max(0.008, (b.t - a.t) / 1000); // floor: samples can share a tick; the speed clamp does the rest
     return { x: (b.x - a.x) / dt, y: (b.y - a.y) / dt };
   }
 

@@ -2,16 +2,50 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no"
+    />
+    <meta name="description" content="A quiet desk, a deck of cards, and 52! arrangements to witness." />
+    <!-- Home-screen web app: the modern name and Apple's older one. -->
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Solitaire ∞" />
+    <!-- Stop iOS turning card counts and times into tappable phone links. -->
+    <meta name="format-detection" content="telephone=no, date=no, address=no, email=no" />
     <meta name="theme-color" content="#1f3a34" />
+    <meta name="color-scheme" content="dark" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icon-180.png" />
     <title>Idle Solitaire Infinite</title>
+    <style>
+      /* First paint: the felt and the lamp, before any JavaScript runs. Removed once the app mounts. */
+      #boot {
+        position: fixed;
+        inset: 0;
+        background: radial-gradient(60% 60% at 42% 36%, #24423b 0%, #1f3a34 45%, #162925 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #c9a45c;
+        font: 16px/1.5 ui-serif, 'Iowan Old Style', Palatino, Georgia, serif;
+        letter-spacing: 0.06em;
+        transition: opacity 0.4s ease;
+        z-index: 10;
+      }
+      #boot.gone { opacity: 0; pointer-events: none; }
+    </style>
   </head>
   <body>
     <div id="app"></div>
+    <div id="boot">Squaring the deck…</div>
+    <noscript>
+      <p style="color: #f4ead8; font: 16px system-ui; padding: 24px">
+        This game needs JavaScript. It runs entirely in your browser; nothing is sent anywhere unless you turn on
+        cloud save.
+      </p>
+    </noscript>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

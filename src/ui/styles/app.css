@@ -2,6 +2,11 @@
 
 * { box-sizing: border-box; }
 html, body, #app { height: 100%; margin: 0; }
+html {
+  /* No rubber-band on iOS: the felt is a table, not a page. */
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+}
 body {
   background: var(--felt-deep);
   color: var(--paper);
@@ -11,6 +16,37 @@ body {
   -webkit-user-select: none; user-select: none;
   -webkit-touch-callout: none;
   overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  /* Double-tap zoom is a 300 ms tax on every tap, and pinch-zoom fights the table. */
+  touch-action: manipulation;
+}
+
+/* iPad landscape is the design target; portrait still plays, but say so once. */
+@media (orientation: portrait) and (pointer: coarse) {
+  body::after {
+    content: 'This desk is happiest turned sideways.';
+    position: fixed;
+    left: 50%;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%);
+    z-index: 20;
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: rgba(244, 234, 216, 0.92);
+    color: #2a2320;
+    font: 13px/1 ui-sans-serif, system-ui, sans-serif;
+    white-space: nowrap;
+    pointer-events: none;
+    animation: portrait-hint 6s ease forwards;
+  }
+  @keyframes portrait-hint {
+    0%, 70% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
 .num { font-family: var(--font-serif); font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
 button {

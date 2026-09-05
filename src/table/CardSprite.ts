@@ -62,6 +62,9 @@ export class CardSprite extends Container {
   }
 
   resize(w: number, h: number): void {
+    // Called for all 52 cards on every board push. Rebuilding four Graphics and re-rasterising the
+    // mark text each time cost more than the rest of the frame put together.
+    if (w === this.w && h === this.h) return;
     this.w = w;
     this.h = h;
     this.face.width = w;

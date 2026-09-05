@@ -18,17 +18,24 @@ export default defineConfig({
         short_name: 'Solitaire ∞',
         description: 'A quiet desk, a deck of cards, and 52! arrangements to witness.',
         theme_color: '#1f3a34',
-        background_color: '#16292500'.slice(0, 7),
+        background_color: '#162925',
         display: 'standalone',
         orientation: 'landscape',
         start_url: '/',
+        scope: '/',
+        categories: ['games'],
         icons: [
-          { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },
-          { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+          { src: 'icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: 'icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
         ]
       },
-      workbox: { globPatterns: ['**/*.{js,css,html,svg,png,woff2}'] },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        // The save API must never be served from the cache — it is the one live thing here.
+        navigateFallbackDenylist: [/^\/api\//],
+        cleanupOutdatedCaches: true
+      },
       devOptions: { enabled: false }
     })
   ],

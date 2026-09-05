@@ -13,6 +13,12 @@ Newest first. One entry per lesson: **what happened → what we do now.**
 - Unit tests never saw the engine/host seam → real-gesture browser tests.
 - Plugin contracts leaked `if (gameId)` into shared code → the contract is the only surface; fix it, don't route around it.
 
+## 2026-09-05 — session 4 (iPad platform pass)
+- **Touch taps were silently broken while touch drags worked.** `nativeEvent.timeStamp` on touch events is on an inconsistent epoch — a 60 ms tap measured 953 ms, so the tap branch never fired. → A release that never moved is a tap, whatever the clock says; durations use `performance.now()` only. Mouse-event tests could never have caught this: **test the touch path with real touch events** (`Input.dispatchTouchEvent` over CDP).
+- **`CardSprite.resize()` ran for all 52 cards on every board push**, rebuilding four Graphics and re-rasterising text each time. → Early-return when the size is unchanged.
+- **Headless frame rate is a fill-rate measurement, not a code measurement**: 15 fps at 1x density, 4.6 at 2x, while our CPU cost is 0.1-0.3 ms per board push and 0.04 ms per render. → Assert on CPU cost; ignore headless FPS.
+- **`pkill -f <pattern>` and even `pgrep -f` can match the shell running them** (exit 144). → Find the process by port: `ss -ltnpH 'sport = :5201' | grep -oP 'pid=\K[0-9]+'`.
+
 ## 2026-09-05 — session 3 (M5–M7)
 - **`pkill -f <pattern>` kills the shell running it** when the pattern appears in that shell's own command line (exit 144). → `pgrep -f "[v]ite preview" | xargs -r kill` (the bracket trick), or kill by port.
 - **Killing an `npx` spawn leaves the real server on the port.** → Spawn `node_modules/.bin/<tool>` directly, `detached: true`, and kill the process group.
