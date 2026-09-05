@@ -17,7 +17,7 @@ non-obvious. Status is kept here and in `CLAUDE.md`.
 - State + save v1 (IndexedDB + localStorage + export) with defensive load + migrations.
 - **Exit:** headless: a woken card raises rate; N s offline ≡ N s live; save round-trips.
 
-## M2 — Klondike you can play ◐ (2026-09-05: playable, gesture-tested; win cascade + riffle animation open)
+## M2 — Klondike you can play ✅ (2026-09-05; riffle choreography, win cascade, tap-to-skip)
 - `GameModule` contract + registry; immutable Klondike rules; seeded deals; undo.
 - Table renders `BoardView`; tap-to-move, drag, throw-catch, flip, deal choreography.
 - Home play wakes/charges; win → burst + non-modal cascade. Auto-Dealer (greedy + cycle detect).

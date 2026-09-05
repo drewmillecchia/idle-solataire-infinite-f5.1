@@ -34,8 +34,8 @@ Rule-twist Marks reach rules through a `Twists` object the module *may* consult:
 
 | Order | Game | Why it's here | Notes |
 | --- | --- | --- | --- |
-| 1 | **Klondike** (draw 1 / draw 3, redeal limit option) | The solitaire. ~82 % winnable; the familiar hand. | Ships in M2. Solver for Scholar deals in a worker later. |
-| 2 | **TriPeaks** | Fast, forgiving (~90 % winnable), chains → sparks feel great. Proves the contract with a totally different layout. | Mostly tap-driven; also proves tap-first games. |
+| 1 | **Klondike** (draw 1 / draw 3, redeal limit option) | The solitaire. ~82 % winnable; the familiar hand. | ✅ Shipped (M2). Greedy autoplay wins 22/60. Solver for Scholar deals later. |
+| 2 | **TriPeaks** | Fast, forgiving (~90 % winnable), chains → sparks feel great. Proves the contract with a totally different layout. | ✅ Shipped (2026-09-05) with **zero** renderer changes. Greedy wins 11/40. Every pyramid position is its own one-card pile. |
 | 3 | **Golf** | Very short hands (~1–2 min). Low win rate makes wins special. | Matching sequence game. |
 | 4 | **Pyramid** | A *matching* game (pairs to 13). Different mental mode. | Two-card selection interaction. |
 | 5 | **FreeCell** | Nearly always winnable; the puzzle-lover's game. Way of the Scholar's home. | All face-up; drag-heavy. |
@@ -43,6 +43,16 @@ Rule-twist Marks reach rules through a `Twists` object the module *may* consult:
 
 Each game declares which Marks' rule-twists it honours. Charge/wake semantics are game-agnostic: any
 card landing on a foundation (or being *removed* in TriPeaks/Golf/Pyramid) counts as "home".
+
+## Contract notes learned from TriPeaks
+- **Piles paint in array order**; later piles draw on top and win hit-testing. Overlapping layouts list
+  lower rows later. Now documented on `BoardView`.
+- Overlapping single-card piles have overlapping `extent`s. Pointer hit-testing goes through the
+  renderer's topmost sprite, so it resolves correctly; any code that hit-tests via `layout.piles`
+  directly must iterate in reverse ("topmost wins").
+- `PileView.slot` (default true except `kind: 'peak'`) controls whether an empty position draws an outline.
+- Barrel naming: a game's move enumerator is `legal<Game>Moves` (`legalMoves` is Klondike's legacy name)
+  because `rules/index.ts` re-exports every game.
 
 ## Deal generation
 - `rng` is a seeded PRNG (mulberry32) so a hand can be replayed and a bug report can carry a seed.

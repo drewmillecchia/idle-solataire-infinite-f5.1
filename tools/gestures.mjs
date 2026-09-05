@@ -186,6 +186,28 @@ step(`dealt: stock ${before.stock}, tableau ${before.tableau.map((t) => `${t.dow
   }
 }
 
+// 7. Second game through the same seam: switch to TriPeaks, tap a playable peak card, expect it homed to the waste.
+{
+  await page.evaluate(() => { window.__game.switchGame('tripeaks'); window.__table.skipChoreography(); });
+  await page.waitForTimeout(400);
+  const mv = await page.evaluate(() => {
+    const g = window.__game; const t = { isWild: () => false, isMirror: () => false, dealtFaceUp: () => false };
+    const v = g.module.view(g.board);
+    for (const p of v.piles) if (p.pickableFrom !== undefined && p.cards.length && g.module.autoTarget(g.board, p.id, 0, t)) return { pile: p.id, waste: g.board.waste.length, homed: g.state.stats.totalHomed };
+    return null;
+  });
+  if (!mv) step('tripeaks: no playable card on this deal; skipped');
+  else {
+    const p = await point(mv.pile);
+    await page.mouse.move(p.x, p.y); await page.mouse.down(); await page.waitForTimeout(30); await page.mouse.up();
+    await page.waitForTimeout(500);
+    const after = await page.evaluate(() => ({ waste: window.__game.board.waste.length, homed: window.__game.state.stats.totalHomed }));
+    if (after.waste !== mv.waste + 1 || after.homed !== mv.homed + 1) fail(`tripeaks tap on ${mv.pile} did not home (waste ${mv.waste}->${after.waste}, homed ${mv.homed}->${after.homed})`);
+    else step(`tripeaks tap ${mv.pile} homed to waste`);
+  }
+  await page.evaluate(() => { window.__game.switchGame('klondike'); window.__table.skipChoreography(); });
+}
+
 await page.screenshot({ path: 'tools/out/gestures.png' });
 await browser.close();
 if (errors.length) { console.error(errors.join('\n')); process.exitCode = 1; }

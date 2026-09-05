@@ -13,6 +13,12 @@ Newest first. One entry per lesson: **what happened → what we do now.**
 - Unit tests never saw the engine/host seam → real-gesture browser tests.
 - Plugin contracts leaked `if (gameId)` into shared code → the contract is the only surface; fix it, don't route around it.
 
+## 2026-09-05 — session 2 (M2 completion, TriPeaks)
+- **Headless WebGL screenshots can capture a half-drawn frame** (felt yes, cards no) even though the scene graph is fine. → `preserveDrawingBuffer: true` in DEV/test builds; probe the scene graph before chasing a "rendering bug".
+- **Software GL in headless Chromium runs ~15 fps**, so any `await` inside a synthetic flick turns it into a slow drag. → Dispatch the flick's pointer events synchronously; the table clamps speed to `throwMaxPxPerS`.
+- **Paint order was load-bearing but undocumented** — TriPeaks' overlapping rows only worked because the renderer assigned z in pile order. → Documented on `BoardView`; contract findings from a new game go straight into `docs/06-games.md`.
+- **Shuffling at the stock slot pushed the left packet off the felt.** → Shuffle in the dealer's hands (felt centre), then slide the squared deck to the stock.
+
 ## 2026-09-05 — session 1 (M0 build)
 - **Spring integrator diverged** at tiny `response` (0.02 s) with a fixed 8 ms sub-step: semi-implicit Euler needs ω·h ≲ 0.5. → Sub-step is `min(8 ms, response/12)`, capped at 400 steps. A test pins it (`tests/spring.test.ts`).
 - **Pixi 8 sizing:** `renderer.width/height` are physical pixels; `app.screen` is logical (CSS) pixels. Dividing physical by DPR *again* drew the felt at a quarter size. → Always lay out from `app.screen`.
