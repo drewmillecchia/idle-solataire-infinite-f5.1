@@ -13,6 +13,12 @@ Newest first. One entry per lesson: **what happened → what we do now.**
 - Unit tests never saw the engine/host seam → real-gesture browser tests.
 - Plugin contracts leaked `if (gameId)` into shared code → the contract is the only surface; fix it, don't route around it.
 
+## 2026-09-05 — session 3 (M5–M7)
+- **`pkill -f <pattern>` kills the shell running it** when the pattern appears in that shell's own command line (exit 144). → `pgrep -f "[v]ite preview" | xargs -r kill` (the bracket trick), or kill by port.
+- **Killing an `npx` spawn leaves the real server on the port.** → Spawn `node_modules/.bin/<tool>` directly, `detached: true`, and kill the process group.
+- **`vite preview` needs its own `preview.proxy`** — the dev `server.proxy` does not apply, so browser probes against a preview build silently 404 on `/api`.
+- **Tests that mutate engine state directly must flag the view's list cache** (`host.markSlow()`) now that lists rebuild on events or every 500 ms; a probe that reads `view.*` right after poking `state.*` is otherwise racy.
+
 ## 2026-09-05 — session 3 review (20 confirmed findings from a read-only Opus pass)
 - **Pixi 8 never dispatches `pointercancel`** — the stage listener was dead code; a system gesture mid-drag stranded the drag forever. → Listen on the canvas element itself, plus a 3 s drag watchdog.
 - **Defensive deserialize hid import failures**: `importString` returned a blank state instead of throwing, so "Import" wiped the save with a success message. → Validate the payload before adopting it; never persist on failure. A function that never throws needs a caller that checks.
