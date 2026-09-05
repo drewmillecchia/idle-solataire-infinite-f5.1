@@ -2,6 +2,7 @@
 export * from './module';
 export * from './registry';
 export * from './autoplay';
+export * from './solver';
 export * from './games/klondike';
 export * from './games/tripeaks';
 export * from './games/golf';

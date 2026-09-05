@@ -166,6 +166,10 @@ export function derive(state: GameState): Derived {
       sparkMult = sparkMult.times(0.5);
       autoDealerUnlocked = true;
       break;
+    case 'scholar':
+      // Deals are always winnable and undo is free; in exchange each charge is worth less.
+      chargeSlope *= 0.7;
+      break;
     case 'gambler': {
       // The wager `dealHand` rolled for this hand (docs/02-game-design.md §5). It is applied HERE
       // and nowhere else (invariant #2), and it moves the two payouts the player feels move —

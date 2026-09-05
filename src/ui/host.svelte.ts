@@ -6,6 +6,7 @@ import type { GameModule, GameConfig, BoardView } from '$rules/module';
 
 import { GAMES, gameById } from '$rules/registry';
 import type { GameOption } from '$rules/module';
+import type { SolverRequest, SolverResponse } from '$rules/solver/worker';
 import { nextMove } from '$rules/autoplay';
 import { mulberry32, randomSeed } from '$engine/rng';
 import { EventBus } from '$engine/events';
@@ -61,6 +62,7 @@ export interface View {
   lastGesture: string;
   storageWarning: boolean;
   cloud: { enabled: boolean; status: string };
+  scholarThinking: boolean;
   cut: {
     revealed: boolean;
     canCut: boolean;
@@ -347,11 +349,48 @@ export class GameHost implements TableHost {
 
   private config(): GameConfig { return this.state.gameConfig[this.module.id] ?? {}; }
 
+  private solver: Worker | null = null;
+  private solverId = 0;
+  private scholarPending: number | null = null;
+  /** Way of the Scholar: ask the solver worker for a proven-winnable Klondike seed, then deal it. */
+  private dealScholar(silent: boolean, count: boolean): void {
+    if (!this.solver) {
+      try {
+        this.solver = new Worker(new URL('../rules/solver/worker.ts', import.meta.url), { type: 'module' });
+        this.solver.onmessage = (ev: MessageEvent<SolverResponse>) => {
+          if (ev.data.id !== this.scholarPending) return;
+          this.scholarPending = null;
+          this.dealSeed(ev.data.seed ?? randomSeed(), silent, count);
+        };
+        this.solver.onerror = () => { this.scholarPending = null; this.solver = null; this.dealSeed(randomSeed(), silent, count); };
+      } catch {
+        this.dealSeed(randomSeed(), silent, count);
+        return;
+      }
+    }
+    const id = ++this.solverId;
+    this.scholarPending = id;
+    const req: SolverRequest = { id, seed: randomSeed() % 1_000_000, config: this.config(), opts: { maxTries: 25, budgetNodes: 60_000 } };
+    this.solver.postMessage(req);
+    // Never wait forever on a worker: fall back to an ordinary deal.
+    setTimeout(() => { if (this.scholarPending === id) { this.scholarPending = null; this.dealSeed(randomSeed(), silent, count); } }, 6000);
+    this.pushView();
+  }
+
   newHand(silent = false, count = !silent): void {
     if (this.cutting) return;
     this.dealerPending = null;
     this.table?.clearHint();
-    this.seed = randomSeed();
+    if (this.state.run.way === 'scholar' && this.module.id === 'klondike' && typeof Worker !== 'undefined') {
+      this.dealScholar(silent, count);
+      return;
+    }
+    this.dealSeed(randomSeed(), silent, count);
+  }
+
+  private dealSeed(seed: number, silent: boolean, count: boolean): void {
+    if (this.cutting) return;
+    this.seed = seed;
     this.board = this.module.deal(mulberry32(this.seed), this.config(), this.twists());
     this.history = [];
     this.handMoves = 0;
@@ -666,7 +705,7 @@ export class GameHost implements TableHost {
     return {
       revision: 0, shuffles: '0', lifetime: '0', rate: '0/s', awake: 0, cutsPerformed: 0, handsWon: 0, handsPlayed: 0,
       moves: 0, won: false, stuck: false, canUndo: false, dealerActive: false, dealerUnlocked: false, dealerCountdown: 0,
-      nextMilestoneLabel: '', nextMilestoneProgress: 0, journey: 0, ledger: [], toasts: [], upgrades: [], offline: null, wonBanner: null, lastGesture: '', storageWarning: false, cloud: { enabled: false, status: 'off' },
+      nextMilestoneLabel: '', nextMilestoneProgress: 0, journey: 0, ledger: [], toasts: [], upgrades: [], offline: null, wonBanner: null, lastGesture: '', storageWarning: false, cloud: { enabled: false, status: 'off' }, scholarThinking: false,
       cut: { revealed: false, canCut: false, cutsOnCut: '0', progress: 0, potential: '0', runEarned: '0', threshold: '0', cuts: '0', lifetimeCuts: '0', cutsPerformed: 0, way: 'none', ways: [], cutting: false },
       constellation: [],
       reshuffle: { revealed: false, can: false, onReshuffle: '0', progress: 0, cycleCuts: '0', threshold: '0', permutations: '0', lifetimePermutations: '0', reshuffles: 0 },
@@ -754,6 +793,7 @@ export class GameHost implements TableHost {
       wonBanner: this.wonBanner,
       storageWarning: this.storageWarning,
       cloud: { enabled: s.settings.cloud, status: this.cloudStatus },
+      scholarThinking: this.scholarPending !== null,
       cut: {
         revealed: s.revealed.includes('cut') || s.prestige.cutsPerformed > 0,
         canCut: canCut(s, d) && !this.cutting,

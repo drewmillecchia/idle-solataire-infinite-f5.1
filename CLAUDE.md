@@ -102,5 +102,7 @@ docs/  brainstorming/  memory/  .claude/{agents,skills}
 - **Review pass done** (20 confirmed findings fixed; see `memory/lessons.md`).
 - **M7 Stage 1 done** — `server/` (Hono, `SaveStore` seam, SQLite now / DynamoDB stub), `platform/cloud.ts`,
   host syncs boot/30 s/hide with the greater-progress conflict rule. 354 tests + `tools/cloud-probe.mjs`.
-- Open: Scholar's winnable deals (solver worker), Gambler Mark fizzle, Golf/Pyramid feel pass on iPad, M6 sound
-  polish + Idle Riffle, DynamoDB store + real auth.
+- **Scholar live** — `rules/solver/klondike.ts` (in-place DFS, transposition table, safe automove; 48 % of seeds proven
+  within 60 k nodes, median 16 ms to find one) behind a Web Worker; free undo; wins charge the awake deck. 369 tests.
+- Open: Gambler Mark fizzle, Golf/Pyramid feel pass on iPad, M6 sound polish + Idle Riffle, DynamoDB store + real auth,
+  Ascension.

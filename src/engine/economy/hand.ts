@@ -4,6 +4,7 @@
  */
 import type Decimal from 'break_eternity.js';
 import { derive } from './derive';
+import { chargeCard } from './cards';
 import { mulberry32 } from '../rng';
 import type { EventBus } from '../events';
 import type { GameState } from '../state';
@@ -43,7 +44,8 @@ export interface WinHandParams {
 /** Pays the win burst: 60s of deckRate x burstMult, halved-ish (x0.7) if the hand used an undo. */
 export function winHand(state: GameState, bus: EventBus, params: WinHandParams): Decimal {
   const d = derive(state);
-  const undoPenalty = state.run.undosThisHand > 0 ? 0.7 : 1;
+  // The Scholar's undo is free; elsewhere a hand with undos pays 70 % (docs/06 — a nudge, not a punishment).
+  const undoPenalty = state.run.undosThisHand > 0 && state.run.way !== 'scholar' ? 0.7 : 1;
   const burst = d.deckRate.times(60).times(d.burstMult).times(undoPenalty);
 
   state.shuffles = state.shuffles.plus(burst);
@@ -59,6 +61,10 @@ export function winHand(state: GameState, bus: EventBus, params: WinHandParams):
   state.run.handsWon += 1;
   state.stats.totalWins += 1;
 
+  if (state.run.way === 'scholar') {
+    // Way of the Scholar (docs/02 §5): every win charges the whole awake deck.
+    state.cards.forEach((c, id) => { if (c.awake) chargeCard(state, bus, id, 'way', 0); });
+  }
   bus.emit({ type: 'hand-won', burst, game: params.game, moves: params.moves, seconds: params.seconds });
   return burst;
 }

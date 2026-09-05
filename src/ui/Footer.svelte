@@ -11,7 +11,8 @@
     <span class="dim">of 8.07e67 · {host.view.lifetime} witnessed</span>
   </div>
   <div class="mid">
-    {#if host.view.won}<span class="won">Hand won.</span>{:else if host.view.stuck}<span class="dim">Nothing moves.</span>{/if}
+    {#if host.view.scholarThinking}<span class="dim">The Scholar is choosing a deal that can be won.</span>
+    {:else if host.view.won}<span class="won">Hand won.</span>{:else if host.view.stuck}<span class="dim">Nothing moves.</span>{/if}
     {#if host.view.dealerUnlocked}
       <span class="dealer" class:active={host.view.dealerActive}>
         {host.view.dealerActive ? 'The dealer is playing' : `Dealer in ${Math.ceil(host.view.dealerCountdown)}s`}
