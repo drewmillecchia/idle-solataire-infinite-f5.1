@@ -30,7 +30,7 @@ non-obvious. Status is kept here and in `CLAUDE.md`.
 - Headless sim; pacing tests (first cut 12–30 min; ≤ 3 reveals/min 1; no divergence in 24 h).
 - **Exit:** sim passes; cut ceremony (riffle + lamp flicker) plays; Way choice changes a run.
 
-## M4 — Marks
+## M4 — Marks ◐ (2026-09-05: engine slice in progress; Deck spread + glyph rendering done)
 - Mark interpreter over the event bus (depth-capped chains); first six Marks; placement UI on the
   deck spread; rule-twist hook in Klondike (Wild, Mirror, Glass).
 - **Exit:** Twin + Kindling chain observable in a test and on screen; a Wild card is placeable anywhere.

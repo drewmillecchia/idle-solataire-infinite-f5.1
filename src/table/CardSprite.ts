@@ -146,6 +146,8 @@ export class CardSprite extends Container {
     this.scale.set(s * Math.max(0.02, sx), s);
     this.face.visible = f >= 0.5;
     this.back.visible = f < 0.5;
+    // An awake card glows faintly from behind when face-down: you can see the deck's warmth in the stock.
+    this.back.tint = this.awake ? 0xffe9c4 : 0xffffff;
     this.awakeMark.visible = this.awake && f >= 0.5;
     this.chargeTicks.visible = this.charge > 0 && f >= 0.5;
     if (this.markText) this.markText.visible = f >= 0.5;
