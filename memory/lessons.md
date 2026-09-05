@@ -13,6 +13,14 @@ Newest first. One entry per lesson: **what happened → what we do now.**
 - Unit tests never saw the engine/host seam → real-gesture browser tests.
 - Plugin contracts leaked `if (gameId)` into shared code → the contract is the only surface; fix it, don't route around it.
 
+## 2026-09-05 — session 3 review (20 confirmed findings from a read-only Opus pass)
+- **Pixi 8 never dispatches `pointercancel`** — the stage listener was dead code; a system gesture mid-drag stranded the drag forever. → Listen on the canvas element itself, plus a 3 s drag watchdog.
+- **Defensive deserialize hid import failures**: `importString` returned a blank state instead of throwing, so "Import" wiped the save with a success message. → Validate the payload before adopting it; never persist on failure. A function that never throws needs a caller that checks.
+- **Any DOM button can interrupt a canvas choreography** (New hand during the cut ceremony dropped `performCut` and left `cutting` stuck). → Guard host actions on `cutting`; `cancelChoreography` aborts throws; long-lived callbacks verify the board they act on.
+- **Unit tests could not see the Klondike foundation round-trip farm** because autoplay refuses foundation pickups. → A card pays once per hand; read the *player's* affordances, not the sim's.
+- **Sub-threshold offline gaps forfeited earnings** (only `gone > 30` applied offline). → Always apply; threshold only the notice.
+- Review-worthy pattern: ask a reviewer for *concrete failure scenarios* and to separate confirmed from plausible; it produced 20 confirmed items with file:line in one pass.
+
 ## 2026-09-05 — session 3 (M3, M4)
 - **A `cmd | tail -1 && git commit` chain committed on a failing gate** — the pipe's exit code is `tail`'s. → Gate chains use `set -o pipefail` or check the script's own exit; browser tools exit non-zero on failure for exactly this reason.
 - While a background agent edits `src/engine`, the dev server hot-reloads half-written files and browser probes can fail transiently. → Rerun once before chasing; check `svelte-check` output for files you own.
