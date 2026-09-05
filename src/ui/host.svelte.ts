@@ -50,6 +50,7 @@ export interface View {
   upgrades: { id: string; name: string; blurb: string; owned: number; max: number | null; cost: string; affordable: boolean; effect: string }[];
   offline: { seconds: number; earned: string } | null;
   wonBanner: { burst: string } | null;
+  lastGesture: string;
   gameId: string;
   gameName: string;
   games: { id: string; name: string; blurb: string }[];
@@ -296,13 +297,27 @@ export class GameHost implements TableHost {
 
   // Auto-Dealer -----------------------------------------------------------
   dealerEnabled = true;
+  private dealerPending: ReturnType<typeof nextMove> | null = null;
   private dealerTick(dt: number): void {
     if (!this.derived.autoDealerUnlocked || !this.dealerEnabled) return;
     if (this.module.isWon(this.board)) return;
     const idle = (performance.now() - this.lastActivity) / 1000;
-    if (idle < this.state.settings.autoDealerDelaySeconds) return;
+    if (idle < this.state.settings.autoDealerDelaySeconds) { this.dealerPending = null; return; }
     this.dealerTimer += dt;
-    if (this.dealerTimer < 0.9) return;
+    const beat = this.dealerBeat();
+    if (this.dealerPending) {
+      // Phase 2: the telegraphed move lands after half a beat.
+      if (this.dealerTimer < beat * 0.5) return;
+      this.dealerTimer = 0;
+      const mv = this.dealerPending;
+      this.dealerPending = null;
+      this.table?.clearHint();
+      this.dealerSeen.add(this.module.hash(this.board));
+      if (mv.kind === 'draw') this.apply(this.module.draw(this.board, NO_TWISTS), 'stock');
+      else this.tryMove(mv.pile, mv.index, mv.to);
+      return;
+    }
+    if (this.dealerTimer < beat * 0.5) return;
     this.dealerTimer = 0;
     const mv = nextMove(this.module, this.board, NO_TWISTS, this.dealerSeen);
     if (!mv) {
@@ -310,9 +325,14 @@ export class GameHost implements TableHost {
       if (idle > this.state.settings.autoDealerDelaySeconds + 4) this.newHand();
       return;
     }
-    this.dealerSeen.add(this.module.hash(this.board));
-    if (mv.kind === 'draw') this.apply(this.module.draw(this.board, NO_TWISTS), 'stock');
-    else this.tryMove(mv.pile, mv.index, mv.to);
+    // Phase 1: telegraph.
+    this.dealerPending = mv;
+    if (mv.kind === 'draw') this.table?.hint('stock', 0, null);
+    else this.table?.hint(mv.pile, mv.index, mv.to);
+  }
+  private dealerBeat(): number {
+    const d = this.derived as Derived & { dealerBeatSeconds?: number };
+    return d.dealerBeatSeconds ?? 0.9;
   }
 
   // Economy UI -------------------------------------------------------------
@@ -369,7 +389,7 @@ export class GameHost implements TableHost {
     return {
       revision: 0, shuffles: '0', lifetime: '0', rate: '0/s', awake: 0, cutsPerformed: 0, handsWon: 0, handsPlayed: 0,
       moves: 0, won: false, stuck: false, canUndo: false, dealerActive: false, dealerUnlocked: false, dealerCountdown: 0,
-      nextMilestoneLabel: '', nextMilestoneProgress: 0, journey: 0, ledger: [], toasts: [], upgrades: [], offline: null, wonBanner: null,
+      nextMilestoneLabel: '', nextMilestoneProgress: 0, journey: 0, ledger: [], toasts: [], upgrades: [], offline: null, wonBanner: null, lastGesture: '',
       gameId: 'klondike', gameName: 'Klondike', games: [], gameOptions: [], settings: { sound: true, haptics: true, reducedMotion: false, autoDealerDelaySeconds: 12, shuffleStyle: 'riffle' }
     };
   }
@@ -419,6 +439,7 @@ export class GameHost implements TableHost {
       }),
       offline: this.offlineNotice,
       wonBanner: this.wonBanner,
+      lastGesture: this.table ? `${this.table.lastGesture.kind}${this.table.lastGesture.target ? ' → ' + this.table.lastGesture.target : ''} · ${Math.round(this.table.lastGesture.speed)} px/s · held ${Math.round(this.table.lastGesture.held)} ms` : '',
       gameId: this.module.id,
       gameName: this.module.name,
       games: GAMES.map((g) => ({ id: g.id, name: g.name, blurb: g.blurb })),

@@ -498,6 +498,30 @@ export class Table {
     return t instanceof CardSprite ? t : null;
   }
 
+  /**
+   * The Auto-Dealer telegraphs its next move: lift the source card slightly and glow the target for a
+   * beat, so watching it play is something rather than nothing (docs/02-game-design.md §7).
+   */
+  hint(pile: string, index: number, to: string | null): void {
+    this.clearHint();
+    const sp = pile === 'stock' ? null : [...this.sprites.values()].find((s) => s.pile === pile && s.index === index) ?? null;
+    if (sp) {
+      sp.lift.target = 0.5;
+      sp.scaleS.target = 1 + (this.feel.liftScale - 1) * 0.5;
+      this.hinted.push(sp);
+    }
+    if (to) this.setTargetGlow([to], this.feel.targetGlowAlpha);
+    this.hintTarget = to;
+  }
+  clearHint(): void {
+    for (const sp of this.hinted) { sp.lift.target = 0; sp.scaleS.target = 1; }
+    this.hinted = [];
+    if (this.hintTarget) this.setTargetGlow([this.hintTarget], 0);
+    this.hintTarget = null;
+  }
+  private hinted: CardSprite[] = [];
+  private hintTarget: string | null = null;
+
   /** A tap during a shuffle or deal finishes it immediately (docs/05-feel.md: the deal is skippable). */
   skipChoreography(): void {
     if (this.timers.length === 0) return;
@@ -512,6 +536,7 @@ export class Table {
 
   private onDown = (e: FederatedPointerEvent): void => {
     this.host.activity();
+    this.clearHint();
     if (this.timers.length > 0 && !this.celebration) { this.skipChoreography(); return; }
     if (this.drag || this.throwing) return;
     const sp = this.spriteAt(e);

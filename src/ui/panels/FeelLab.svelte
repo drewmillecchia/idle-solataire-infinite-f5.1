@@ -27,6 +27,7 @@
 
 <div class="lab">
   <p class="hint">Drag cards while you tune. Export, then paste into <code>src/content/feel.json</code>.</p>
+  <p class="last num">Last release: {host.view.lastGesture || '—'}</p>
   <div class="actions">
     <button class="link" onclick={copy}>{copied ? 'Copied' : 'Copy JSON'}</button>
     <button class="link" onclick={() => host.resetFeel()}>Reset</button>
@@ -48,6 +49,7 @@
 <style>
   .lab { color: var(--paper-shade); font-size: 12px; }
   .hint { color: var(--ink-soft); line-height: 1.5; margin: 0 0 8px; }
+  .last { color: var(--moss); margin: 0 0 8px; font-size: 12px; }
   code { color: var(--brass); }
   .actions { display: flex; gap: 14px; margin-bottom: 6px; }
   .link { color: var(--brass); font-weight: 600; }
