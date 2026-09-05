@@ -128,8 +128,10 @@
   }
   .offline p { margin: 0; }
   .warn { top: auto; bottom: 14px; background: var(--rouge); color: var(--paper); }
+  /* Bottom-centre, not top: the top of the felt is where the foundations live in most games, and a
+     card sitting over them for seven seconds is in the way of the very move it is congratulating. */
   .milestone {
-    position: absolute; left: 50%; top: 12px; transform: translateX(-50%);
+    position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%);
     display: flex; flex-direction: column; align-items: center; gap: 2px;
     background: var(--paper); color: var(--ink); padding: 10px 22px; border-radius: var(--radius);
     box-shadow: var(--shadow); border-top: 3px solid var(--brass); max-width: 70%; text-align: center;
@@ -139,7 +141,7 @@
   .ms-value { font-family: var(--font-serif); font-size: 22px; color: var(--ink); line-height: 1.1; }
   .ms-ledger { font-family: var(--font-serif); font-style: italic; font-size: 13px; color: var(--ink-soft); margin-top: 2px; }
   @keyframes arrive {
-    from { opacity: 0; transform: translateX(-50%) translateY(-14px); }
+    from { opacity: 0; transform: translateX(-50%) translateY(14px); }
     to { opacity: 1; transform: translateX(-50%) translateY(0); }
   }
   .note {
