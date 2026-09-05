@@ -85,6 +85,8 @@ export class Table {
   private pendingView: BoardView | null = null;
   private texturesBuildingFor = 0;
   private dealing = false;
+  private celebration: { sprites: { sp: CardSprite; vx: number; vy: number; bounces: number }[]; age: number } | null = null;
+  private choreo = 0; // token: bumping it cancels pending choreography timers
 
   feel: Feel;
   host: TableHost;
@@ -105,7 +107,10 @@ export class Table {
       backgroundAlpha: 0,
       resolution: this.dpr,
       autoDensity: true,
-      preference: 'webgl'
+      preference: 'webgl',
+      // Headless screenshots read the back buffer between frames; keeping it costs little and makes
+      // captures deterministic. Only in test/dev builds.
+      preserveDrawingBuffer: import.meta.env.DEV || location.search.includes('test')
     });
     parent.appendChild(this.app.canvas);
     this.app.canvas.style.touchAction = 'none';
@@ -196,10 +201,16 @@ export class Table {
   }
 
   /** Push a new board. Sprites reconcile by card id and spring to their new places. */
-  setBoard(view: BoardView, opts: { instant?: boolean; relayout?: boolean; deal?: boolean } = {}): void {
+  setBoard(view: BoardView, opts: { instant?: boolean; relayout?: boolean; deal?: boolean; shuffle?: 'riffle' | 'overhand' | 'none' } = {}): void {
     this.view = view;
     if (!this.ready) {
       this.pendingView = view;
+      return;
+    }
+    if (opts.instant || opts.deal) this.cancelChoreography();
+    if (opts.deal && opts.shuffle && opts.shuffle !== 'none') {
+      // Choreograph: gather → shuffle → then the normal deal. The deal is scheduled after the shuffle.
+      this.shuffleChoreography(view, opts.shuffle);
       return;
     }
     const layout = layoutBoard(view, this.width, this.height);
@@ -210,6 +221,8 @@ export class Table {
     // Slots.
     for (const [id, s] of this.slots) if (!layout.piles.has(id)) { s.destroy(); this.slots.delete(id); }
     for (const [id, pl] of layout.piles) {
+      const wantsSlot = pl.pile.slot ?? pl.pile.kind !== 'peak';
+      if (!wantsSlot) { const old = this.slots.get(id); if (old) { old.destroy(); this.slots.delete(id); } continue; }
       let s = this.slots.get(id);
       if (!s) {
         s = new Sprite(this.textures.slot);
@@ -230,6 +243,8 @@ export class Table {
     const dragging = new Set(this.drag?.sprites.map((s) => s.id) ?? []);
     let z = 0;
     let dealDelay = 0;
+    const dealBase = this.dealBaseDelay;
+    this.dealBaseDelay = 0;
     for (const pl of layout.piles.values()) {
       const pile = pl.pile;
       pile.cards.forEach((c, i) => {
@@ -269,7 +284,7 @@ export class Table {
             sp.snapTo(sx, sy);
             sp.setFaceUp(false, true);
             sp.pos.configure(this.r(this.feel.dealResponse), this.feel.dealDamping);
-            const delay = dealDelay++ * (this.feel.dealIntervalMs / 1000);
+            const delay = dealBase + dealDelay++ * (this.feel.dealIntervalMs / 1000);
             this.later(delay, () => {
               sp.pos.setTarget(tx, ty);
               sp.rot.velocity = (Math.random() - 0.5) * 3;
@@ -299,10 +314,148 @@ export class Table {
     this.cardLayer.sortChildren();
   }
 
-  private timers: { at: number; fn: () => void }[] = [];
+  private timers: { at: number; fn: () => void; token: number }[] = [];
   private clock = 0;
   private later(delay: number, fn: () => void): void {
-    this.timers.push({ at: this.clock + delay, fn });
+    this.timers.push({ at: this.clock + delay, fn, token: this.choreo });
+  }
+  /** Drop every pending choreography step (a new hand interrupts a deal or a celebration). */
+  private cancelChoreography(): void {
+    this.choreo++;
+    this.timers = [];
+    if (this.celebration) {
+      for (const c of this.celebration.sprites) { c.sp.alpha = 1; c.sp.rot.set(0); }
+      this.celebration = null;
+    }
+  }
+
+  private dealBaseDelay = 0;
+
+  /**
+   * Shuffle set piece (docs/05-feel.md). Every sprite gathers on the stock, splits into two packets,
+   * riffles back together (alternating drops, jittered), squares up, and then the deal runs.
+   */
+  private shuffleChoreography(view: BoardView, style: 'riffle' | 'overhand'): void {
+    if (!this.layout || !this.textures) { this.setBoard(view, { deal: true, shuffle: 'none' }); return; }
+    const L = this.layout;
+    // Shuffle in the dealer's hands — the middle of the felt — then slide the squared deck to the stock.
+    const cx = this.width / 2;
+    const cy = this.height * 0.45;
+    const stock = L.piles.get('stock');
+    const sx = (stock ? stock.x : L.offsetX) + L.cardW / 2;
+    const sy = (stock ? stock.y : L.offsetY) + L.cardH / 2;
+    const all = [...this.sprites.values()];
+    if (all.length === 0) { this.setBoard(view, { deal: true, shuffle: 'none' }); return; }
+    const gatherT = 0.28;
+    all.forEach((sp, i) => {
+      this.dragLayer.removeChild(sp);
+      this.cardLayer.addChild(sp);
+      sp.zIndex = i;
+      sp.setFaceUp(false);
+      sp.lift.target = 0; sp.scaleS.target = 1;
+      sp.pos.configure(this.r(gatherT), 0.9);
+      sp.pos.setTarget(cx + (Math.random() - 0.5) * 3, cy + (Math.random() - 0.5) * 3);
+      sp.rot.target = (Math.random() - 0.5) * 0.06;
+    });
+    this.cardLayer.sortChildren();
+    this.host.sound('slide', 0.5);
+    const total = (style === 'riffle' ? this.feel.riffleDurationMs : this.feel.overhandDurationMs) / 1000;
+    const split = L.cardW * 0.62;
+    // Split into two packets.
+    this.later(gatherT + 0.05, () => {
+      all.forEach((sp, i) => {
+        const left = i % 2 === 0;
+        sp.pos.configure(this.r(0.16), 0.85);
+        sp.pos.setTarget(cx + (left ? -split : split), cy + (left ? 6 : -6));
+        sp.rot.target = left ? -0.09 : 0.09;
+      });
+      this.host.sound('square', 0.4);
+    });
+    // Interleave back to the centre.
+    const riffleStart = gatherT + 0.32;
+    const order = all.slice().sort(() => Math.random() - 0.5);
+    order.forEach((sp, k) => {
+      const t = riffleStart + (k / order.length) * total * 0.8 + (Math.random() - 0.5) * 0.02;
+      this.later(t, () => {
+        sp.pos.configure(this.r(0.12), 0.8);
+        sp.pos.setTarget(cx + (Math.random() - 0.5) * 2, cy + (Math.random() - 0.5) * 2);
+        sp.rot.target = (Math.random() - 0.5) * 0.03;
+        sp.zIndex = 100 + k;
+        this.cardLayer.sortChildren();
+      });
+    });
+    this.later(riffleStart, () => this.host.sound('riffle', 0.7));
+    // Square up, slide to the stock, then deal.
+    const squareAt = riffleStart + total * 0.8 + 0.25;
+    this.later(squareAt, () => {
+      all.forEach((sp) => { sp.rot.target = 0; sp.pos.setTarget(cx, cy); });
+    });
+    this.later(squareAt + 0.2, () => {
+      all.forEach((sp) => { sp.pos.configure(this.r(0.3), 0.9); sp.pos.setTarget(sx, sy); });
+      this.host.sound('slide', 0.6);
+    });
+    this.later(squareAt + 0.55, () => {
+      this.dealBaseDelay = 0;
+      this.setBoard(view, { deal: true, shuffle: 'none' });
+    });
+  }
+
+  /** Win celebration: foundation cards leap off and tumble across the felt, bouncing on the table edge. */
+  celebrate(): void {
+    if (!this.layout || !this.view) return;
+    const tops: CardSprite[] = [];
+    for (const pl of this.view.piles) {
+      if (pl.kind !== 'foundation') continue;
+      for (const c of pl.cards) if (c.id !== null) { const sp = this.sprites.get(c.id); if (sp) tops.push(sp); }
+    }
+    if (tops.length === 0) return;
+    const parts = tops.map((sp, i) => ({ sp, vx: 0, vy: 0, bounces: 0, delay: i * 0.045 }));
+    this.celebration = { sprites: [], age: 0 };
+    parts.forEach((p) => {
+      this.later(p.delay, () => {
+        if (!this.celebration) return;
+        p.sp.zIndex = 5000 + this.celebration.sprites.length;
+        this.cardLayer.addChild(p.sp);
+        this.cardLayer.sortChildren();
+        p.vx = (Math.random() - 0.5) * 900;
+        p.vy = -(500 + Math.random() * 400);
+        p.sp.rot.velocity = (Math.random() - 0.5) * 6;
+        this.celebration.sprites.push(p);
+        this.host.sound('pick', 0.4);
+      });
+    });
+  }
+
+  private stepCelebration(dt: number): void {
+    const c = this.celebration;
+    if (!c || !this.layout) return;
+    c.age += dt;
+    const floor = this.height - this.layout.cardH / 2 - 8;
+    const g = 2600;
+    let alive = 0;
+    for (const p of c.sprites) {
+      if (p.sp.alpha <= 0.02) continue;
+      alive++;
+      p.vy += g * dt;
+      let x = p.sp.pos.x.value + p.vx * dt, y = p.sp.pos.y.value + p.vy * dt;
+      if (y > floor) {
+        y = floor;
+        p.vy = -p.vy * 0.55;
+        p.vx *= 0.9;
+        p.bounces++;
+        this.host.sound('place', clamp(Math.abs(p.vy) / 1500, 0.2, 0.8));
+        this.host.haptic('tick');
+      }
+      p.sp.snapTo(x, y);
+      p.sp.rotation = p.sp.rot.value;
+      if (p.bounces >= 3) p.sp.alpha = Math.max(0, p.sp.alpha - dt * 1.8);
+      if (x < -this.layout.cardW || x > this.width + this.layout.cardW) p.sp.alpha = 0;
+    }
+    if (alive === 0 && c.age > 1) {
+      this.celebration = null;
+      for (const p of c.sprites) p.sp.alpha = 1;
+      if (this.view) this.setBoard(this.view, { instant: true });
+    }
   }
 
   private makeSprite(id: CardId): CardSprite {
@@ -345,8 +498,21 @@ export class Table {
     return t instanceof CardSprite ? t : null;
   }
 
+  /** A tap during a shuffle or deal finishes it immediately (docs/05-feel.md: the deal is skippable). */
+  skipChoreography(): void {
+    if (this.timers.length === 0) return;
+    for (let guard = 0; guard < 8 && this.timers.length; guard++) {
+      const due = this.timers.slice().sort((a, b) => a.at - b.at);
+      this.timers = [];
+      for (const t of due) if (t.token === this.choreo) t.fn();
+    }
+    this.timers = [];
+    if (this.view) this.setBoard(this.view, { instant: true });
+  }
+
   private onDown = (e: FederatedPointerEvent): void => {
     this.host.activity();
+    if (this.timers.length > 0 && !this.celebration) { this.skipChoreography(); return; }
     if (this.drag || this.throwing) return;
     const sp = this.spriteAt(e);
     const { x, y } = e.global;
@@ -575,9 +741,10 @@ export class Table {
       const due = this.timers.filter((t) => t.at <= this.clock);
       if (due.length) {
         this.timers = this.timers.filter((t) => t.at > this.clock);
-        due.forEach((t) => t.fn());
+        due.forEach((t) => { if (t.token === this.choreo) t.fn(); });
       }
     }
+    this.stepCelebration(dt);
     // Lamp breathes (very slowly).
     this.lampPhase += dt;
     this.felt.alpha = 1 - (Math.sin((this.lampPhase / 9) * Math.PI * 2) + 1) * 0.008;

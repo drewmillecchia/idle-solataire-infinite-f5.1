@@ -1,9 +1,13 @@
 <script lang="ts">
   // The window: stars fill in as the journey toward 52! progresses. Deterministic star field.
   let { journey }: { journey: number } = $props();
+  // mulberry32 per star so consecutive stars are uncorrelated (an LCG here drew a diagonal line).
+  function rng(seed: number): () => number {
+    let a = seed >>> 0;
+    return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  }
   const STARS = Array.from({ length: 140 }, (_, i) => {
-    let a = (i + 1) * 2654435761 >>> 0;
-    const r = () => { a = (a * 1664525 + 1013904223) >>> 0; return a / 4294967296; };
+    const r = rng(1000 + i * 7919);
     return { x: r() * 100, y: r() * 100, s: 0.6 + r() * 1.4, o: i / 140 };
   });
   const visible = $derived(STARS.filter((s) => s.o <= journey + 0.02));

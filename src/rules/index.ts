@@ -3,3 +3,4 @@ export * from './module';
 export * from './registry';
 export * from './autoplay';
 export * from './games/klondike';
+export * from './games/tripeaks';

@@ -5,6 +5,7 @@
 import type { GameModule, GameConfig, BoardView } from '$rules/module';
 import { NO_TWISTS } from '$rules/module';
 import { GAMES, gameById } from '$rules/registry';
+import type { GameOption } from '$rules/module';
 import { nextMove } from '$rules/autoplay';
 import { mulberry32, randomSeed } from '$engine/rng';
 import { EventBus } from '$engine/events';
@@ -48,8 +49,11 @@ export interface View {
   toasts: { id: number; text: string }[];
   upgrades: { id: string; name: string; blurb: string; owned: number; max: number | null; cost: string; affordable: boolean; effect: string }[];
   offline: { seconds: number; earned: string } | null;
+  wonBanner: { burst: string } | null;
   gameId: string;
   gameName: string;
+  games: { id: string; name: string; blurb: string }[];
+  gameOptions: { option: GameOption; value: string }[];
   settings: GameState['settings'];
 }
 
@@ -80,6 +84,7 @@ export class GameHost implements TableHost {
   private toasts: { id: number; text: string }[] = [];
   private ledger: Ledger[] = [];
   private offlineNotice: View['offline'] = null;
+  private wonBanner: View['wonBanner'] = null;
   private stopped = false;
 
   constructor() {
@@ -204,8 +209,25 @@ export class GameHost implements TableHost {
     this.handStartedAt = performance.now();
     this.dealerSeen.clear();
     dealHand(this.state, this.bus, this.module.id, this.seed);
-    this.table?.setBoard(this.module.view(this.board), silent ? { instant: true } : { deal: true });
-    if (!silent) sound('riffle', 0.6);
+    this.wonBanner = null;
+    const style = this.state.settings.shuffleStyle === 'random' ? (Math.random() < 0.5 ? 'riffle' : 'overhand') : this.state.settings.shuffleStyle;
+    this.table?.setBoard(this.module.view(this.board), silent ? { instant: true } : { deal: true, shuffle: style });
+    this.pushView();
+  }
+
+  switchGame(id: string): void {
+    const m = gameById(id);
+    if (!m) return;
+    this.module = m as GameModule<unknown>;
+    this.state.activeGame = id;
+    this.newHand();
+    void this.save();
+  }
+
+  setGameOption(optionId: string, value: string): void {
+    const cfg = { ...(this.state.gameConfig[this.module.id] ?? {}) };
+    cfg[optionId] = value;
+    this.state.gameConfig[this.module.id] = cfg;
     this.pushView();
   }
 
@@ -237,7 +259,9 @@ export class GameHost implements TableHost {
     this.table?.setBoard(this.module.view(this.board));
     if (result.won) {
       const secs = (performance.now() - this.handStartedAt) / 1000;
-      winHand(this.state, this.bus, { game: this.module.id, moves: this.handMoves, seconds: secs });
+      const burst = winHand(this.state, this.bus, { game: this.module.id, moves: this.handMoves, seconds: secs });
+      this.wonBanner = { burst: formatNumber(burst) };
+      this.table?.celebrate();
     }
     this.pushView();
     return true;
@@ -320,7 +344,7 @@ export class GameHost implements TableHost {
   private onEvent(e: GameEvent): void {
     switch (e.type) {
       case 'card-woken': this.sound('chime', 0.6); this.toast('A card wakes.'); break;
-      case 'hand-won': this.sound('bloom', 0.8); this.haptic('success'); this.toast(`Hand won. ${formatNumber(e.burst)} shuffles.`); break;
+      case 'hand-won': this.sound('bloom', 0.8); this.haptic('success'); break;
       case 'milestone': {
         const m = MILESTONES.find((x) => x.id === e.id);
         if (m) this.ledger.unshift({ id: m.id, text: m.ledger, at: Date.now() });
@@ -345,8 +369,8 @@ export class GameHost implements TableHost {
     return {
       revision: 0, shuffles: '0', lifetime: '0', rate: '0/s', awake: 0, cutsPerformed: 0, handsWon: 0, handsPlayed: 0,
       moves: 0, won: false, stuck: false, canUndo: false, dealerActive: false, dealerUnlocked: false, dealerCountdown: 0,
-      nextMilestoneLabel: '', nextMilestoneProgress: 0, journey: 0, ledger: [], toasts: [], upgrades: [], offline: null,
-      gameId: 'klondike', gameName: 'Klondike', settings: { sound: true, haptics: true, reducedMotion: false, autoDealerDelaySeconds: 12, shuffleStyle: 'riffle' }
+      nextMilestoneLabel: '', nextMilestoneProgress: 0, journey: 0, ledger: [], toasts: [], upgrades: [], offline: null, wonBanner: null,
+      gameId: 'klondike', gameName: 'Klondike', games: [], gameOptions: [], settings: { sound: true, haptics: true, reducedMotion: false, autoDealerDelaySeconds: 12, shuffleStyle: 'riffle' }
     };
   }
 
@@ -394,8 +418,11 @@ export class GameHost implements TableHost {
         return { id: u.id, name: u.name, blurb: u.blurb, owned, max: u.max, cost: formatNumber(cost), affordable: s.shuffles.gte(cost) && (u.max === null || owned < u.max), effect: describeEffect(u.effect) };
       }),
       offline: this.offlineNotice,
+      wonBanner: this.wonBanner,
       gameId: this.module.id,
       gameName: this.module.name,
+      games: GAMES.map((g) => ({ id: g.id, name: g.name, blurb: g.blurb })),
+      gameOptions: this.module.options.map((option) => ({ option, value: this.config()[option.id] ?? option.default })),
       settings: { ...s.settings }
     };
     this.view = v;

@@ -39,11 +39,17 @@ export interface PileView {
   /** Overlapping-pile hint for layouts like TriPeaks where a card is blocked by cards above it. */
   covered?: boolean;
   blocked?: boolean;
+  /** Draw an empty-slot outline when the pile is empty. Defaults to true except for kind 'peak'. */
+  slot?: boolean;
 }
 
 export interface BoardView {
   cols: number; // grid extent in card widths
   rows: number; // grid extent in card heights
+  /**
+   * Piles PAINT IN ARRAY ORDER: a later pile draws on top of an earlier one, and the topmost card under
+   * the pointer wins hit-testing. Overlapping layouts (TriPeaks rows) rely on this — list lower rows later.
+   */
   piles: PileView[];
 }
 
