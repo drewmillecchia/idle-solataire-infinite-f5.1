@@ -13,9 +13,10 @@
  * so a presenter sees the mark light up and then the consequences arrive.
  *
  * FIZZLE. Way of the Gambler (docs/02-game-design.md §5): a trigger mark (echo, kindling, twin,
- * heavy — never a passive or a twist, which are not events) misfires `ECONOMY.gamblerFizzleChance`
- * of the time. The roll is deterministic, not `Math.random()`: `rollFizzle` mixes the hand's own
- * deal seed with `fizzleSeq`, a counter bumped on every trigger-mark opportunity, into `mulberry32`
+ * heavy, ember, wick — never a passive or a twist, which are not events) misfires
+ * `ECONOMY.gamblerFizzleChance` of the time. The roll is deterministic, not `Math.random()`:
+ * `rollFizzle` mixes the hand's own deal seed with `fizzleSeq`, a counter bumped on every
+ * trigger-mark opportunity, into `mulberry32`
  * — so replaying the same events against the same hand seed fizzles exactly the same way. A
  * fizzle emits `mark-fired` with `fizzled: true` and applies none of the mark's effects.
  */
@@ -26,7 +27,7 @@ import { cardDef, cardId } from '../types';
 import type { CardId, Rank } from '../types';
 import type { EventBus } from '../events';
 import type { GameState, HandState } from '../state';
-import { hasMark, placementOf, revealAvailableMarks } from './placement';
+import { cardsWithMark, hasMark, placementOf, revealAvailableMarks } from './placement';
 
 /** Events at or beyond this depth are ignored: the one thing standing between a chain and a loop. */
 export const DEPTH_CAP = 3;
@@ -145,6 +146,46 @@ function onMoved(state: GameState, bus: EventBus, card: CardId, depth: number): 
 }
 
 /**
+ * Ember: when this card wakes, the last card to come home before it gains a charge. "Last" reads
+ * `hand.homedThisHand` — the same per-hand ledger Echo uses. A home play pushes the newly-homed
+ * card onto that list BEFORE it emits `card-woken` (see `homeCard`), so if the waking card is the
+ * list's own tail, the card just before it is the one Ember means; a mark-driven wake (Twin) never
+ * touches that list at all, so its tail is already the right answer.
+ */
+function onEmber(state: GameState, bus: EventBus, card: CardId, depth: number): void {
+  if (!hasMark(state, card, 'ember')) return;
+  const hand = handState(state);
+  const list = hand.homedThisHand;
+  let idx = list.length - 1;
+  if (list[idx] === card) idx -= 1;
+  const last = idx >= 0 ? list[idx] : undefined;
+  if (last === undefined || last === card || !state.cards[last]?.awake) return;
+
+  if (rollFizzle(state)) {
+    fired(bus, 'ember', card, depth, true);
+    return;
+  }
+  fired(bus, 'ember', card, depth);
+  chargeCard(state, bus, last, 'mark', depth + 1);
+}
+
+/** Wick keeps gaining charge from a hand won until its charge reaches this many. */
+const WICK_CHARGE_CAP = 5;
+
+/** Wick: each hand won adds a charge to this card, until its charge reaches WICK_CHARGE_CAP. */
+function onHandWon(state: GameState, bus: EventBus): void {
+  for (const card of cardsWithMark(state, 'wick')) {
+    if ((state.cards[card]?.charge ?? WICK_CHARGE_CAP) >= WICK_CHARGE_CAP) continue;
+    if (rollFizzle(state)) {
+      fired(bus, 'wick', card, 0, true);
+      continue;
+    }
+    fired(bus, 'wick', card, 0);
+    chargeCard(state, bus, card, 'mark', 1);
+  }
+}
+
+/**
  * Subscribes the interpreter to the bus. Returns the unsubscribe function; the host attaches this
  * once, beside the presenters. Attaching twice would double every trigger, so don't.
  */
@@ -166,6 +207,7 @@ export function attachMarks(state: GameState, bus: EventBus): () => void {
         const depth = e.depth ?? 0;
         if (depth >= DEPTH_CAP) return;
         onTwin(state, bus, e.card, depth);
+        onEmber(state, bus, e.card, depth);
         break;
       }
       case 'card-moved': {
@@ -174,6 +216,10 @@ export function attachMarks(state: GameState, bus: EventBus): () => void {
         onMoved(state, bus, e.card, depth);
         break;
       }
+      case 'hand-won':
+        // A win is always player- (or Auto-Dealer-) caused: depth 0, like a home play.
+        onHandWon(state, bus);
+        break;
       case 'cut':
         // A Cut is the only thing that can unlock a mark, so it is the only place to announce one.
         revealAvailableMarks(state, bus);

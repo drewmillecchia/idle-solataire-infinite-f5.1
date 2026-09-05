@@ -152,5 +152,93 @@
     "max": 2,
     "requires": ["scholars-way"],
     "effect": { "kind": "markSlots", "add": 1 }
+  },
+  {
+    "id": "long-memory",
+    "name": "Long Memory",
+    "blurb": "A surviving card remembers more of what it knew.",
+    "branch": "trunk",
+    "cost": "15",
+    "growth": 2,
+    "max": 5,
+    "requires": ["warm-start"],
+    "effect": { "kind": "startCharge", "add": 1 }
+  },
+  {
+    "id": "measured-cut",
+    "name": "Measured Cut",
+    "blurb": "A steadier hand on the knife, cut after cut.",
+    "branch": "trunk",
+    "cost": "15",
+    "growth": 1.5,
+    "max": 8,
+    "requires": ["sharper-cut"],
+    "effect": { "kind": "cutYield", "per": 0.08 }
+  },
+  {
+    "id": "steady-rhythm",
+    "name": "Steady Rhythm",
+    "blurb": "A hand played well keeps paying, cut after cut.",
+    "branch": "hand",
+    "cost": "15",
+    "growth": 1.6,
+    "max": 8,
+    "requires": ["last-light"],
+    "effect": { "kind": "sparkMult", "per": 0.3 }
+  },
+  {
+    "id": "second-wind",
+    "name": "Second Wind",
+    "blurb": "The glow of a finished hand carries further now.",
+    "branch": "hand",
+    "cost": "20",
+    "growth": 1.8,
+    "max": 5,
+    "requires": ["last-light"],
+    "effect": { "kind": "burstMult", "per": 0.4 }
+  },
+  {
+    "id": "night-watch",
+    "name": "Night Watch",
+    "blurb": "The dealer no longer waits for you to look away.",
+    "branch": "dealer",
+    "cost": "20",
+    "growth": 1,
+    "max": 1,
+    "requires": ["practised-dealer"],
+    "effect": { "kind": "dealerAlwaysOn" }
+  },
+  {
+    "id": "quiet-hours",
+    "name": "Quiet Hours",
+    "blurb": "Even fewer pauses, this deep into practice.",
+    "branch": "dealer",
+    "cost": "15",
+    "growth": 1.7,
+    "max": 5,
+    "requires": ["practised-dealer"],
+    "effect": { "kind": "dealerSpeed", "per": 0.08 }
+  },
+  {
+    "id": "stacked-odds",
+    "name": "Stacked Odds",
+    "blurb": "The house edge, if there ever was one, is yours now.",
+    "branch": "gambler",
+    "cost": "25",
+    "growth": 2,
+    "max": 5,
+    "requires": ["loaded-deck"],
+    "effect": { "kind": "globalMult", "per": 0.12 }
+  },
+  {
+    "id": "second-reading",
+    "name": "Second Reading",
+    "blurb": "A deal read twice leaves room for one more note.",
+    "branch": "scholar",
+    "cost": "30",
+    "growth": 3,
+    "max": 2,
+    "requires": ["marginalia"],
+    "effect": { "kind": "markSlots", "add": 1 }
   }
 ]

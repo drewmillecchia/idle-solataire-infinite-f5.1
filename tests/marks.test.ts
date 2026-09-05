@@ -4,7 +4,7 @@ import { createInitialState, SAVE_VERSION, type GameState } from '$engine/state'
 import { cardId, type CardId, type GameEvent } from '$engine/types';
 import { derive } from '$engine/economy/derive';
 import { homeCard } from '$engine/economy/cards';
-import { dealHand } from '$engine/economy/hand';
+import { dealHand, winHand } from '$engine/economy/hand';
 import { performCut } from '$engine/economy/prestige';
 import {
   attachMarks,
@@ -77,10 +77,13 @@ const HK = cardId('H', 13);
 // ---- content -----------------------------------------------------------------------------
 
 describe('marks content', () => {
-  it('parses via its schema and holds the ten documented marks', () => {
+  it('parses via its schema and holds the fourteen documented marks', () => {
     expect(() => MarksSchema.parse(marksJson)).not.toThrow();
     expect(MARKS.map((m) => m.id).sort()).toEqual(
-      ['anchor', 'echo', 'glass', 'heavy', 'kindling', 'lantern', 'mirror', 'tithe', 'twin', 'wild'].sort()
+      [
+        'anchor', 'compass', 'echo', 'ember', 'glass', 'heavy', 'kindling', 'ledger', 'lantern',
+        'mirror', 'tithe', 'twin', 'wick', 'wild'
+      ].sort()
     );
   });
 
@@ -96,7 +99,11 @@ describe('marks content', () => {
       mirror: 10,
       glass: 10,
       heavy: 15,
-      tithe: 15
+      tithe: 15,
+      ember: 20,
+      ledger: 24,
+      compass: 28,
+      wick: 32
     });
   });
 
@@ -128,6 +135,8 @@ describe('mark availability', () => {
     expect(availableMarks(state).map((m) => m.id)).toEqual(['echo', 'lantern', 'kindling', 'twin']);
 
     state.prestige.lifetimeCuts = D(15);
+    expect(availableMarks(state)).toHaveLength(10); // the original ten; ember/ledger/compass/wick unlock later
+    state.prestige.lifetimeCuts = D(32);
     expect(availableMarks(state)).toHaveLength(MARKS.length);
   });
 
@@ -408,6 +417,73 @@ describe('Heavy', () => {
   });
 });
 
+describe('Ember', () => {
+  it('charges the last card that came home before this one wakes', () => {
+    const state = markState(32);
+    const { bus, events } = withBus();
+    attachMarks(state, bus);
+    expect(place(state, bus, 'ember', [H5])).toBe(true);
+
+    dealHand(state, bus, 'klondike', 1);
+    homeCard(state, bus, S5, 'foundation-s'); // first home this hand: nothing came before it
+    expect(state.run.hand.homedThisHand).toEqual([S5]);
+
+    events.length = 0;
+    const before = state.cards[S5]?.charge ?? 0;
+    homeCard(state, bus, H5, 'foundation-h'); // wakes the Ember card: S5 (the last home) gains a charge
+    expect(state.cards[S5]?.charge).toBe(before + 1);
+    expect(firedFor(events, 'ember')).toEqual([{ type: 'mark-fired', mark: 'ember', card: H5, depth: 0 }]);
+  });
+
+  it('does nothing for the first card home in a hand', () => {
+    const state = markState(32);
+    const { bus, events } = withBus();
+    attachMarks(state, bus);
+    expect(place(state, bus, 'ember', [S5])).toBe(true);
+    dealHand(state, bus, 'klondike', 1);
+    homeCard(state, bus, S5, 'foundation-s'); // nothing came home before this one
+    expect(firedFor(events, 'ember')).toHaveLength(0);
+  });
+
+  it('also answers a mark-driven wake, crediting whichever card is last in the hand ledger', () => {
+    const state = markState(32);
+    const { bus, events } = withBus();
+    attachMarks(state, bus);
+    expect(place(state, bus, 'ember', [S7])).toBe(true);
+    dealHand(state, bus, 'klondike', 1);
+    homeCard(state, bus, S5, 'foundation-s');
+
+    events.length = 0;
+    const before = state.cards[S5]?.charge ?? 0;
+    bus.emit({ type: 'card-woken', card: S7, depth: 0 }); // e.g. a Twin-driven wake
+    expect(state.cards[S5]?.charge).toBe(before + 1);
+    expect(firedFor(events, 'ember')).toEqual([{ type: 'mark-fired', mark: 'ember', card: S7, depth: 0 }]);
+  });
+});
+
+describe('Wick', () => {
+  it('adds a charge on every hand won, and stops once charge reaches five', () => {
+    const state = markState(32);
+    const { bus, events } = withBus();
+    attachMarks(state, bus);
+    expect(place(state, bus, 'wick', [S5])).toBe(true);
+
+    for (let i = 0; i < 7; i++) {
+      dealHand(state, bus, 'klondike', i);
+      winHand(state, bus, { game: 'klondike', moves: 1, seconds: 10 });
+    }
+    expect(state.cards[S5]?.charge).toBe(5);
+    expect(firedFor(events, 'wick').length).toBeGreaterThanOrEqual(5);
+
+    // A hand won past the cap fires nothing further for this card.
+    events.length = 0;
+    dealHand(state, bus, 'klondike', 99);
+    winHand(state, bus, { game: 'klondike', moves: 1, seconds: 10 });
+    expect(state.cards[S5]?.charge).toBe(5);
+    expect(firedFor(events, 'wick')).toHaveLength(0);
+  });
+});
+
 // ---- passives ----------------------------------------------------------------------------
 
 describe('Lantern', () => {
@@ -458,6 +534,58 @@ describe('Tithe', () => {
     expect((tithed.perCard[D3] ?? D(1)).eq(0)).toBe(true);
     expect((tithed.perCard[D9] ?? D(0)).div(baseD9).toNumber()).toBeCloseTo(1.25, 10);
     expect((tithed.perCard[S5] ?? D(0)).eq(base.perCard[S5] ?? D(0))).toBe(true);
+  });
+});
+
+describe('Ledger', () => {
+  it("counts its own charge twice toward the Devotion upgrade's count", () => {
+    const state = markState(32);
+    const { bus } = withBus();
+    state.run.upgrades['devotion'] = 1; // per = 0.4
+    state.run.homedThisRun = 10;
+    wake(state, S5, 3);
+
+    const base = derive(state).mults.devotion;
+    expect(place(state, bus, 'ledger', [S5])).toBe(true);
+    const withLedger = derive(state).mults.devotion;
+
+    const expectedBase = 1 + 0.4 * Math.log10(1 + 10);
+    const expectedWithLedger = 1 + 0.4 * Math.log10(1 + 10 + 3); // +charge, counted a second time
+    expect(base.toNumber()).toBeCloseTo(expectedBase, 10);
+    expect(withLedger.toNumber()).toBeCloseTo(expectedWithLedger, 10);
+  });
+});
+
+describe('Compass', () => {
+  it("gives the lowest-charged awake card of its suit this card's own charge", () => {
+    const state = markState(32);
+    const { bus } = withBus();
+    wake(state, D3, 5); // the Compass card
+    wake(state, D9, 0); // the lowest-charged awake card of suit D
+    wake(state, cardId('D', 5), 2);
+    const base = derive(state);
+    const baseD9 = base.perCard[D9] ?? D(0);
+    const baseD3 = base.perCard[D3] ?? D(0);
+
+    expect(place(state, bus, 'compass', [D3])).toBe(true);
+    const after = derive(state);
+    // D9 now earns as though its charge were 5 (D3's), not 0: (1 + 0.1*5) / (1 + 0.1*0) = 1.5.
+    expect((after.perCard[D9] ?? D(0)).div(baseD9).toNumber()).toBeCloseTo(1.5, 10);
+    // The Compass card is not the lowest-charged of its suit, so its own output is untouched.
+    expect((after.perCard[D3] ?? D(0)).eq(baseD3)).toBe(true);
+  });
+
+  it('does nothing while the Compass card itself is asleep', () => {
+    const state = markState(32);
+    const { bus } = withBus();
+    wake(state, D9, 0);
+    const withoutCompass = derive(state).perCard[D9] ?? D(0);
+
+    wake(state, D3, 5);
+    const compassCard = state.cards[D3];
+    if (compassCard) compassCard.awake = false; // placed, but asleep
+    expect(place(state, bus, 'compass', [D3])).toBe(true);
+    expect((derive(state).perCard[D9] ?? D(0)).eq(withoutCompass)).toBe(true);
   });
 });
 
@@ -601,8 +729,8 @@ function moveS7(bus: EventBus): void {
 }
 
 describe('Gambler Mark fizzle', () => {
-  it('is a trigger-mark-only concept: exactly echo, kindling, twin, heavy', () => {
-    expect(TRIGGER_MARKS.slice().sort()).toEqual(['echo', 'heavy', 'kindling', 'twin']);
+  it('is a trigger-mark-only concept: exactly echo, kindling, twin, heavy, ember, wick', () => {
+    expect(TRIGGER_MARKS.slice().sort()).toEqual(['echo', 'ember', 'heavy', 'kindling', 'twin', 'wick']);
   });
 
   it('is deterministic: the same hand seed reproduces the same fizzle sequence exactly', () => {

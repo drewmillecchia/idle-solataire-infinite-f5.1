@@ -107,5 +107,85 @@
     "max": 1,
     "effect": { "kind": "autoDealer" },
     "revealAfter": { "awake": 52 }
+  },
+  {
+    "id": "comeback",
+    "name": "Comeback",
+    "blurb": "A quiet table works harder than a full one.",
+    "baseCost": "6000",
+    "growth": 1.35,
+    "max": null,
+    "effect": { "kind": "comebackMult", "per": 0.5 },
+    "revealAfter": { "homed": 60 }
+  },
+  {
+    "id": "long-streak",
+    "name": "Long Streak",
+    "blurb": "Every hand finished makes the next one richer.",
+    "baseCost": "8000",
+    "growth": 1.4,
+    "max": null,
+    "effect": { "kind": "handsWonMult", "per": 0.4 },
+    "revealAfter": { "homed": 80 }
+  },
+  {
+    "id": "even-trade",
+    "name": "Even Trade",
+    "blurb": "Smaller sparks, brighter wins.",
+    "baseCost": "10000",
+    "growth": 1.45,
+    "max": 15,
+    "effect": { "kind": "sparkForBurst", "per": 0.06 },
+    "revealAfter": { "homed": 100 }
+  },
+  {
+    "id": "crowned",
+    "name": "Crowned",
+    "blurb": "Face cards remember harder than the rest of the deck.",
+    "baseCost": "12000",
+    "growth": 1.4,
+    "max": null,
+    "effect": { "kind": "chargeMultFace", "per": 0.04 },
+    "revealAfter": { "homed": 120 }
+  },
+  {
+    "id": "underdog-suits",
+    "name": "Underdog Suits",
+    "blurb": "The two suits you play least still get a turn.",
+    "baseCost": "15000",
+    "growth": 1.45,
+    "max": null,
+    "effect": { "kind": "laggardSuitMult", "per": 0.15 },
+    "revealAfter": { "homed": 140 }
+  },
+  {
+    "id": "favored-suit",
+    "name": "Favored Suit",
+    "blurb": "Lean into the suit you already lean on.",
+    "baseCost": "18000",
+    "growth": 1.45,
+    "max": null,
+    "effect": { "kind": "topSuitMult", "per": 0.12 },
+    "revealAfter": { "homed": 160 }
+  },
+  {
+    "id": "big-turn",
+    "name": "Big Turn",
+    "blurb": "A hand that keeps going keeps paying.",
+    "baseCost": "22000",
+    "growth": 1.5,
+    "max": 15,
+    "effect": { "kind": "chainMult", "per": 0.015 },
+    "revealAfter": { "homed": 180 }
+  },
+  {
+    "id": "fresh-cards",
+    "name": "Fresh Cards",
+    "blurb": "A young card still has more to prove.",
+    "baseCost": "26000",
+    "growth": 1.45,
+    "max": null,
+    "effect": { "kind": "freshCardMult", "per": 0.25 },
+    "revealAfter": { "homed": 200 }
   }
 ]

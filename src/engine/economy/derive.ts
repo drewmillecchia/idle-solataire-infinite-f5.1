@@ -6,7 +6,7 @@ import Decimal from 'break_eternity.js';
 import { CONSTELLATION, UPGRADES } from '$content/index';
 import { D } from '../numbers';
 import { rankValue } from '../numbering';
-import { cardDef } from '../types';
+import { cardDef, SUITS } from '../types';
 import type { Suit } from '../types';
 import type { GameState } from '../state';
 import { cardsWithMark, markSlotsFrom } from '../marks/placement';
@@ -52,11 +52,15 @@ export interface Derived {
   markSlotsTotal: number;
   /** Seconds between Auto-Dealer moves. */
   dealerBeatSeconds: number;
+  /** Constellation rule-twist: the Auto-Dealer plays even while the player is at the table. */
+  autoDealerAlwaysOn: boolean;
 }
 
 const BASE_OFFLINE_HOURS = 8;
 const BASE_CHARGE_SLOPE = 0.1;
 const BASE_DEALER_BEAT_SECONDS = 0.9;
+/** "Fresh Cards" (tier 2): a card counts as young at or below this charge. */
+const FRESH_CHARGE_THRESHOLD = 2;
 
 export function derive(state: GameState): Derived {
   let global = D(1);
@@ -73,10 +77,34 @@ export function derive(state: GameState): Derived {
   let startCharge = 0;
   let markSlots = 0;
   let dealerSpeed = 0;
+  let autoDealerAlwaysOn = false;
+  /** Tier 2: extra chargeMult slope for face cards only (Crowned). */
+  let chargeSlopeFace = 0;
+  /** Tier 2: extra output for cards at or under FRESH_CHARGE_THRESHOLD (Fresh Cards). */
+  let freshBoost = 0;
 
   const cardStates = state.cards;
   const awakeCount = cardStates.reduce((n, c) => (c.awake ? n + 1 : n), 0);
   const homedThisRun = state.run.homedThisRun;
+  /** How many cards have already come home THIS hand (Big Turn). */
+  const homedThisHandCount = state.run.hand?.homedThisHand?.length ?? 0;
+
+  // Ledger (passive): this card's charge counts twice toward the Devotion upgrade's log-count —
+  // computed here, once, so 'devotionMult' below reads the SAME effective count every level.
+  let devotionCount = homedThisRun;
+  for (const id of cardsWithMark(state, 'ledger')) {
+    devotionCount += cardStates[id]?.charge ?? 0;
+  }
+
+  // Per-suit total charge (a proxy for "how much you've played this suit"), used by the tier 2
+  // suit-specialisation upgrades below. Ties break on SUITS' own order (stable sort).
+  const suitChargeSum: Record<Suit, number> = { S: 0, H: 0, D: 0, C: 0 };
+  cardStates.forEach((c, id) => {
+    suitChargeSum[cardDef(id).suit] += c.charge;
+  });
+  const suitsByCharge = [...SUITS].sort((a, b) => suitChargeSum[a] - suitChargeSum[b]);
+  const laggardSuits = new Set(suitsByCharge.slice(0, 2));
+  const topSuit = suitsByCharge[suitsByCharge.length - 1] ?? 'S';
 
   for (const def of UPGRADES) {
     const level = state.run.upgrades[def.id] ?? 0;
@@ -102,13 +130,42 @@ export function derive(state: GameState): Derived {
         awake = awake.times(1 + effect.per * level * (awakeCount / 52));
         break;
       case 'devotionMult':
-        devotion = devotion.times(1 + effect.per * level * Math.log10(1 + homedThisRun));
+        devotion = devotion.times(1 + effect.per * level * Math.log10(1 + devotionCount));
         break;
       case 'offlineHours':
         offlineHours += effect.add * level;
         break;
       case 'autoDealer':
         autoDealerUnlocked = true;
+        break;
+      case 'comebackMult':
+        // Pays MORE the fewer cards are awake: a comeback lever, strongest at the start of a run.
+        global = global.times(1 + effect.per * level * (1 - awakeCount / 52));
+        break;
+      case 'handsWonMult':
+        global = global.times(1 + effect.per * level * Math.log10(1 + state.run.handsWon));
+        break;
+      case 'sparkForBurst': {
+        // A trade, not a pure gain: spark falls, burst rises by twice as much.
+        const trade = Math.min(0.9, effect.per * level);
+        sparkMult = sparkMult.times(1 - trade);
+        burstMult = burstMult.times(1 + effect.per * level * 2);
+        break;
+      }
+      case 'chargeMultFace':
+        chargeSlopeFace += effect.per * level;
+        break;
+      case 'laggardSuitMult':
+        for (const s of laggardSuits) suit[s] = suit[s].times(1 + effect.per * level);
+        break;
+      case 'topSuitMult':
+        suit[topSuit] = suit[topSuit].times(1 + effect.per * level);
+        break;
+      case 'chainMult':
+        global = global.times(1 + effect.per * level * homedThisHandCount);
+        break;
+      case 'freshCardMult':
+        freshBoost += effect.per * level;
         break;
     }
   }
@@ -152,6 +209,11 @@ export function derive(state: GameState): Derived {
         break;
       case 'wayUnlock':
         // Applied at purchase (prestige.waysUnlocked); nothing to derive.
+        break;
+      case 'dealerAlwaysOn':
+        // A RULE twist (docs/02 §9): the Auto-Dealer keeps dealing even while the player watches,
+        // not only through the idle wait. The host loop reads this flag; derive only carries it.
+        autoDealerAlwaysOn = true;
         break;
     }
   }
@@ -207,6 +269,26 @@ export function derive(state: GameState): Derived {
     suit[s] = suit[s].times(1.25);
   }
 
+  // Compass (passive): while awake, the lowest-charged awake card of its suit earns as if it had
+  // the Compass card's own charge. Built as an override map so the perCard pass below (the ONE
+  // place charge turns into a multiplier) is still the only place that reads a card's charge.
+  const chargeOverride = new Map<number, number>();
+  for (const id of cardsWithMark(state, 'compass')) {
+    const compassCard = cardStates[id];
+    if (!compassCard?.awake) continue;
+    const compassSuit = cardDef(id).suit;
+    let lowestId = -1;
+    let lowestCharge = Infinity;
+    cardStates.forEach((c, cid) => {
+      if (!c.awake || cardDef(cid).suit !== compassSuit) return;
+      if (c.charge < lowestCharge) {
+        lowestCharge = c.charge;
+        lowestId = cid;
+      }
+    });
+    if (lowestId >= 0) chargeOverride.set(lowestId, compassCard.charge);
+  }
+
   const mults: DerivedMults = { global, suit, awake, devotion, cut, permutation, way };
 
   const perCard: Decimal[] = cardStates.map((card, id) => {
@@ -214,9 +296,13 @@ export function derive(state: GameState): Derived {
     if (titheCards.has(id)) return D(0);
     const { suit: cardSuit, rank } = cardDef(id);
     const base = rankValue(state.numbering, rank);
+    const effCharge = chargeOverride.get(id) ?? card.charge;
+    const slope = chargeSlope + (rank >= 11 ? chargeSlopeFace : 0);
+    const fresh = effCharge <= FRESH_CHARGE_THRESHOLD ? 1 + freshBoost : 1;
     return base
       .times(suit[cardSuit])
-      .times(1 + chargeSlope * card.charge)
+      .times(1 + slope * effCharge)
+      .times(fresh)
       .times(global)
       .times(awake)
       .times(devotion)
@@ -244,6 +330,7 @@ export function derive(state: GameState): Derived {
     keepCharge: 0,
     markSlots,
     markSlotsTotal: markSlotsFrom(state, markSlots),
-    dealerBeatSeconds: BASE_DEALER_BEAT_SECONDS / (1 + dealerSpeed)
+    dealerBeatSeconds: BASE_DEALER_BEAT_SECONDS / (1 + dealerSpeed),
+    autoDealerAlwaysOn
   };
 }

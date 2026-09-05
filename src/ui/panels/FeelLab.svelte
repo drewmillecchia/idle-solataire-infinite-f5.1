@@ -2,6 +2,7 @@
   /** Live tuning of feel.json (ADR-011). Numbers only; haptics patterns are edited in the file. */
   import type { GameHost } from '../host.svelte';
   import type { Feel } from '$content/index';
+  import { FEEL_PRESETS } from '$content/feelPresets';
   let { host }: { host: GameHost } = $props();
   const groups: { title: string; keys: (keyof Feel)[] }[] = [
     { title: 'Tap & drag', keys: ['tapMaxMs', 'dragThresholdPx', 'liftScale', 'liftResponse', 'shadowLiftPx', 'runLagMs', 'followResponse', 'followDamping'] },
@@ -27,6 +28,12 @@
 
 <div class="lab">
   <p class="hint">Drag cards while you tune. Export, then paste into <code>src/content/feel.json</code>.</p>
+  <div class="presets">
+    {#each FEEL_PRESETS as p (p.id)}
+      <button class="preset" class:on={host.feelPreset === p.id} title={p.blurb} onclick={() => host.applyFeelPreset(p.id)}>{p.name}</button>
+    {/each}
+  </div>
+  <p class="preset-blurb">{FEEL_PRESETS.find((p) => p.id === host.feelPreset)?.blurb ?? ''}</p>
   <p class="last num">Last release: {host.view.lastGesture || '—'}</p>
   <div class="actions">
     <button class="link" onclick={copy}>{copied ? 'Copied' : 'Copy JSON'}</button>
@@ -50,6 +57,10 @@
   .lab { color: var(--paper-shade); font-size: 12px; }
   .hint { color: var(--ink-soft); line-height: 1.5; margin: 0 0 8px; }
   .last { color: var(--moss); margin: 0 0 8px; font-size: 12px; }
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+  .preset { padding: 4px 9px; border-radius: 14px; font-size: 11px; color: var(--paper-shade); background: rgba(244,234,216,0.08); border: 1px solid rgba(201,164,92,0.3); }
+  .preset.on { background: var(--paper); color: var(--ink); border-color: var(--brass); }
+  .preset-blurb { margin: 0 0 8px; font-size: 11px; color: var(--ink-soft); line-height: 1.4; }
   code { color: var(--brass); }
   .actions { display: flex; gap: 14px; margin-bottom: 6px; }
   .link { color: var(--brass); font-weight: 600; }

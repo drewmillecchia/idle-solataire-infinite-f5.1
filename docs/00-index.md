@@ -17,6 +17,11 @@ folder is the *why*.
 | [09-art-direction.md](09-art-direction.md) | "Night Desk" visual language: palette, cards, type, motion, the window. |
 | [10-orchestration.md](10-orchestration.md) | How the AI dev team works: which model does what, review gates, commit policy. |
 | [11-playtest-guide.md](11-playtest-guide.md) | What to try on the iPad after each session and what to report. |
+| [12-ascension.md](12-ascension.md) | The endgame layer past 52!, and the deck-size refactor it needs first. |
+
+The browser gate (`npm run test:browser`) runs `tools/{gestures,cut-flow,marks-flow,reshuffle-flow,cloud-probe,ipad-probe,riffle-probe}.mjs`
+against a production build; `tools/{shot,game-shot,panel-shot,win-shot,arm-probe,dealer-probe,scholar-probe}.mjs`
+are for looking at things by hand.
 
 Ideas that are not decisions live in [`../brainstorming/`](../brainstorming/). Lessons learned live in
 [`../memory/`](../memory/).

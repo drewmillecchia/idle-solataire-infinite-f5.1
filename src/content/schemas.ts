@@ -69,7 +69,23 @@ export const UpgradeEffectSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('awakeMult'), per: z.number() }),
   z.object({ kind: z.literal('devotionMult'), per: z.number() }),
   z.object({ kind: z.literal('offlineHours'), add: z.number() }),
-  z.object({ kind: z.literal('autoDealer') })
+  z.object({ kind: z.literal('autoDealer') }),
+  /** Tier 2 (docs/02 §9 "more to buy"). Pays more the FEWER cards are awake: 1 + per*level*(1 - awake/52). */
+  z.object({ kind: z.literal('comebackMult'), per: z.number() }),
+  /** Scales with hands WON this run (not homed plays): 1 + per*level*log10(1+handsWon). */
+  z.object({ kind: z.literal('handsWonMult'), per: z.number() }),
+  /** A trade, not a pure gain: spark down by per*level, burst up by 2*per*level. */
+  z.object({ kind: z.literal('sparkForBurst'), per: z.number() }),
+  /** Extra chargeMult slope, face cards (J/Q/K) only. */
+  z.object({ kind: z.literal('chargeMultFace'), per: z.number() }),
+  /** Boosts the two suits with the least total charge (the ones you've played least). */
+  z.object({ kind: z.literal('laggardSuitMult'), per: z.number() }),
+  /** Boosts the single suit with the most total charge (specialisation; tension with laggardSuitMult). */
+  z.object({ kind: z.literal('topSuitMult'), per: z.number() }),
+  /** Rewards a long turn: global lifted by how many cards have already come home THIS hand. */
+  z.object({ kind: z.literal('chainMult'), per: z.number() }),
+  /** Boosts cards still under the charge threshold (young cards); tension with Patience. */
+  z.object({ kind: z.literal('freshCardMult'), per: z.number() })
 ]);
 export type UpgradeEffect = z.infer<typeof UpgradeEffectSchema>;
 
@@ -117,7 +133,9 @@ export const ConstellationEffectSchema = z.discriminatedUnion('kind', [
   /** Adds a Way to `prestige.waysUnlocked` on purchase. */
   z.object({ kind: z.literal('wayUnlock'), way: z.enum(['gambler', 'scholar']) }),
   /** Mark slots, stored on `derived.markSlots` for M4. No other effect yet. */
-  z.object({ kind: z.literal('markSlots'), add: z.number().int().min(0) })
+  z.object({ kind: z.literal('markSlots'), add: z.number().int().min(0) }),
+  /** A RULE twist, not a number: the Auto-Dealer keeps playing even while the player is watching. */
+  z.object({ kind: z.literal('dealerAlwaysOn') })
 ]);
 export type ConstellationEffect = z.infer<typeof ConstellationEffectSchema>;
 

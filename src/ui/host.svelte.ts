@@ -23,6 +23,7 @@ import {
 } from '$engine/index';
 import { MILESTONES, FEEL, MARKS, type Feel } from '$content/index';
 import { WAYS } from '$content/ways';
+import { FEEL_PRESETS } from '$content/feelPresets';
 import type { WayId, NumberingId } from '$engine/types';
 import type { Table, TableHost } from '../table/Table';
 import { loadSave, persistSave, requestPersistence, clearSaves, cmpProgress } from '../platform/storage';
@@ -719,7 +720,20 @@ export class GameHost implements TableHost {
     (this.feel as Feel)[k] = v;
     if (this.table) this.table.feel = $state.snapshot(this.feel) as Feel;
   }
+  /** Apply a preset over the defaults. Partial by design, so an untouched key keeps its default. */
+  applyFeelPreset(id: string): void {
+    const preset = FEEL_PRESETS.find((p) => p.id === id);
+    if (!preset) return;
+    Object.assign(this.feel, structuredClone(FEEL), structuredClone(preset.values));
+    if (this.table) this.table.feel = $state.snapshot(this.feel) as Feel;
+    this.feelPreset = id;
+    sound('place', 0.5);
+    this.pushView();
+  }
+  feelPreset = 'default';
+
   resetFeel(): void {
+    this.feelPreset = 'default';
     Object.assign(this.feel, structuredClone(FEEL));
     if (this.table) this.table.feel = $state.snapshot(this.feel) as Feel;
   }

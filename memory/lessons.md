@@ -14,6 +14,7 @@ Newest first. One entry per lesson: **what happened → what we do now.**
 - Plugin contracts leaked `if (gameId)` into shared code → the contract is the only surface; fix it, don't route around it.
 
 ## 2026-09-05 — session 4 (polish, five games)
+- **Playwright's "element is stable" check can loop forever beside a 10 Hz text node** and reports "element was detached from the DOM, retrying" — which reads like a UI bug and is not one. → Confirm with a MutationObserver (zero element removals means no churn), then click by coordinates.
 - **Tests that pin `SAVE_VERSION` to a literal break on every bump** and assert nothing about the feature under test. → Assert `SAVE_VERSION` for a round-trip; assert a literal only when testing one migration *step*, with a comment saying so.
 - **Sizing a grid for a game's worst case makes every card tiny at the deal** (FreeCell sized `rows` for a 20-card column). → The renderer compresses a pile's fan when it outgrows the grid, so a module can size for the common case. This is what a person does with real cards.
 - **Svelte swallows whitespace around an inline `{#if}`** — `{g.hands}{#if g.best} · best{/if}` renders "11· best". → Put the separator inside the expression: `{' · best ' + g.best}`.

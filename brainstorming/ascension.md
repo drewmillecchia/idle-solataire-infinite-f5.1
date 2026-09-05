@@ -1,5 +1,8 @@
 # Ascension — the Infinite
 
+**The worked design now lives in [`../docs/12-ascension.md`](../docs/12-ascension.md).** What follows is
+the original sketch, kept for the variants that did not make it into the plan.
+
 Reaching 52! once (lifetime) unlocks Ascension. Each Ascension changes the *deck*, so 52! is not the
 end but the first landing.
 

@@ -98,5 +98,45 @@
     "arity": 1,
     "kind": "passive",
     "unlockAtLifetimeCuts": 15
+  },
+  {
+    "id": "ember",
+    "name": "Ember",
+    "glyph": "✺",
+    "blurb": "A spark passed backward, to whoever lit it.",
+    "rule": "When this card wakes, the last card to come home before it gains a charge.",
+    "arity": 1,
+    "kind": "trigger",
+    "unlockAtLifetimeCuts": 20
+  },
+  {
+    "id": "ledger",
+    "name": "Ledger",
+    "glyph": "≡",
+    "blurb": "Every visit written down twice, once for good measure.",
+    "rule": "This card's charge counts twice toward devotion.",
+    "arity": 1,
+    "kind": "passive",
+    "unlockAtLifetimeCuts": 24
+  },
+  {
+    "id": "compass",
+    "name": "Compass",
+    "glyph": "❖",
+    "blurb": "It points the weakest card of its suit toward true north.",
+    "rule": "While this card is awake, the lowest-charged awake card of its suit earns as if it had this card's charge.",
+    "arity": 1,
+    "kind": "passive",
+    "unlockAtLifetimeCuts": 28
+  },
+  {
+    "id": "wick",
+    "name": "Wick",
+    "glyph": "⌇",
+    "blurb": "It burns a little brighter with every hand you finish.",
+    "rule": "Each hand won adds a charge to this card, until its charge reaches five.",
+    "arity": 1,
+    "kind": "trigger",
+    "unlockAtLifetimeCuts": 32
   }
 ]
