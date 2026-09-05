@@ -61,6 +61,85 @@ function slope(ys: number[]): number {
   return num / den;
 }
 
+/**
+ * A standalone "how long does the run-upgrade shop keep offering something worth buying" probe
+ * (docs/02 §9 "Run-upgrade tier exhausted"). Deliberately NOT `sim/run.ts`: that harness takes
+ * Cuts, which resets `run.upgrades` to `{}` (see `economy/prestige.ts`'s `resetRun`) every time,
+ * so it cannot see how long a single, uninterrupted run keeps the shop interesting — which is
+ * exactly the "more to buy" question tier 2 answers. This mirrors `sim/run.ts`'s engaged-profile
+ * play loop (same deal/autoplay/buy cadence) minus the Cut policy, against the same real engine.
+ */
+function simulateSingleRunPurchases(minutes: number, seed = 1): { purchaseTimes: number[]; ids: string[] } {
+  const bus = new EventBus();
+  const state = createInitialState(0);
+  const rng = mulberry32(seed);
+  const game = gameById('klondike')!;
+  let board: unknown = game.deal(rng, {}, NO_TWISTS);
+  let seen = new Set<string>();
+  dealHand(state, bus, 'klondike', 0);
+
+  const purchaseTimes: number[] = [];
+  const ids: string[] = [];
+
+  let t = 0;
+  const dt = 0.5;
+  const total = minutes * 60;
+  const movePeriod = 1.2;
+  let moveAcc = 0;
+  let buyAcc = 0;
+  let handStart = 0;
+
+  const newHand = () => {
+    board = game.deal(rng, {}, NO_TWISTS);
+    seen = new Set();
+    dealHand(state, bus, 'klondike', 0);
+    handStart = t;
+  };
+
+  while (t < total) {
+    step(state, dt, bus);
+    t += dt;
+    state.lastSeenAt = t * 1000;
+
+    moveAcc += dt;
+    if (moveAcc >= movePeriod) {
+      moveAcc = 0;
+      const mv = nextMove(game, board, NO_TWISTS, seen);
+      if (!mv || t - handStart > 900) {
+        newHand();
+      } else {
+        seen.add(game.hash(board));
+        const r = mv.kind === 'draw' ? game.draw(board, NO_TWISTS) : game.move(board, mv.pile, mv.index, mv.to, NO_TWISTS);
+        if (r.changed) {
+          board = r.board;
+          for (const id of r.homed) homeCard(state, bus, id, 'sim');
+          if (r.homed.length === 0 && mv.kind !== 'draw') tableauSpark(state, bus);
+          if (r.won) {
+            winHand(state, bus, { game: 'klondike', moves: 0, seconds: t - handStart });
+            newHand();
+          }
+        }
+      }
+    }
+
+    // The same greedy policy sim/run.ts uses for run upgrades, minus the Constellation/Cut half
+    // (there is no Cut here, by design: this probe measures ONE run in isolation).
+    const ups = visibleUpgrades(state, bus);
+    buyAcc += dt;
+    if (buyAcc >= 5) {
+      buyAcc = 0;
+      const affordable = ups.filter((u) => maxAffordable(state, u.id) > 0);
+      affordable.sort((a, b) => upgradeCost(state, a.id).cmp(upgradeCost(state, b.id)));
+      const u = affordable[0];
+      if (u && buyUpgrade(state, bus, u.id, 1)) {
+        purchaseTimes.push(t);
+        ids.push(u.id);
+      }
+    }
+  }
+  return { purchaseTimes, ids };
+}
+
 describe('first Cut (docs/02 9: 12-30 min, engaged)', () => {
   it('lands inside the window on the median of seeds 1..5', () => {
     const times = short.map((r) => r.firstCutAt);

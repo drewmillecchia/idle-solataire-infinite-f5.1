@@ -3,7 +3,7 @@
  * Nothing here knows what Klondike is.
  */
 import { Application, Container, Sprite, Texture, type FederatedPointerEvent } from 'pixi.js';
-import type { BoardView } from '$rules/module';
+import type { BoardView, PileKind } from '$rules/module';
 import type { CardId } from '$engine/types';
 import type { Feel } from '$content/index';
 import { CardSprite } from './CardSprite';
@@ -495,11 +495,21 @@ export class Table {
   /** Win celebration: foundation cards leap off and tumble across the felt, bouncing on the table edge. */
   celebrate(): void {
     if (!this.layout || !this.view) return;
-    const tops: CardSprite[] = [];
-    for (const pl of this.view.piles) {
-      if (pl.kind !== 'foundation') continue;
-      for (const c of pl.cards) if (c.id !== null) { const sp = this.sprites.get(c.id); if (sp) tops.push(sp); }
+    // Where the cards ended up depends on the game: foundations in Klondike and FreeCell, a discard
+    // in Pyramid, the waste in TriPeaks and Golf. Celebrate whichever holds them, so every game gets
+    // its moment rather than only the ones with foundations.
+    const order: PileKind[] = ['foundation', 'discard', 'waste'];
+    let tops: CardSprite[] = [];
+    for (const kind of order) {
+      const found: CardSprite[] = [];
+      for (const pl of this.view.piles) {
+        if (pl.kind !== kind) continue;
+        for (const c of pl.cards) if (c.id !== null) { const sp = this.sprites.get(c.id); if (sp) found.push(sp); }
+      }
+      if (found.length > 0) { tops = found; break; }
     }
+    // Never throw the whole deck at the player: the top of a big pile reads the same and costs less.
+    if (tops.length > 24) tops = tops.slice(-24);
     if (tops.length === 0) return;
     const parts = tops.map((sp, i) => ({ sp, vx: 0, vy: 0, bounces: 0, delay: i * 0.045 }));
     this.celebration = { sprites: [], age: 0 };

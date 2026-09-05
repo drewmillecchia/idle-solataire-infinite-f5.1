@@ -21,6 +21,7 @@ try {
   execSync('node tools/cloud-probe.mjs http://127.0.0.1:5200/?test=1', { stdio: 'inherit' });
   execSync('node tools/ipad-probe.mjs http://127.0.0.1:5200/?test=1', { stdio: 'inherit' });
   execSync('node tools/riffle-probe.mjs http://127.0.0.1:5200/?test=1', { stdio: 'inherit' });
+  execSync('node tools/win-all-probe.mjs http://127.0.0.1:5200/?test=1', { stdio: 'inherit' });
 } finally {
   server.kill();
   api.kill();

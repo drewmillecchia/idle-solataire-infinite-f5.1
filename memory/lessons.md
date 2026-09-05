@@ -14,6 +14,8 @@ Newest first. One entry per lesson: **what happened → what we do now.**
 - Plugin contracts leaked `if (gameId)` into shared code → the contract is the only surface; fix it, don't route around it.
 
 ## 2026-09-05 — session 4 (polish, five games)
+- **Three of five games had no win celebration** and nobody noticed, because the cascade looked only at foundations and Klondike was the only game anyone had won on screen. → Celebrate whichever pile the cards actually end in (foundation, then discard, then waste); a probe now wins *every* game through the host and asserts banner, celebration and record.
+- **A greedy driver cannot win Golf (~0.5 %) or FreeCell (0/30) by chance**, so a probe that waits for a natural win there hangs or fails. → Hand those two a board one move from won and drive the last move through the host, which is the part under test anyway.
 - **Playwright's "element is stable" check can loop forever beside a 10 Hz text node** and reports "element was detached from the DOM, retrying" — which reads like a UI bug and is not one. → Confirm with a MutationObserver (zero element removals means no churn), then click by coordinates.
 - **Tests that pin `SAVE_VERSION` to a literal break on every bump** and assert nothing about the feature under test. → Assert `SAVE_VERSION` for a round-trip; assert a literal only when testing one migration *step*, with a comment saying so.
 - **Sizing a grid for a game's worst case makes every card tiny at the deal** (FreeCell sized `rows` for a 20-card column). → The renderer compresses a pile's fan when it outgrows the grid, so a module can size for the common case. This is what a person does with real cards.
