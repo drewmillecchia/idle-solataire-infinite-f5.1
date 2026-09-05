@@ -77,5 +77,15 @@ docs/  brainstorming/  memory/  .claude/{agents,skills}
 - Log lessons in `memory/lessons.md`; log tuning sessions in `memory/tuning-log.md`.
 - Tone in UI copy: dry, warm, short. No exclamation marks in the ledger. No emoji in code or UI.
 
-## Status
-- **M0 in progress** (2026-09-05): docs, handbook, scaffold, table boot with feel. See `docs/08-roadmap.md`.
+## Status (2026-09-05, end of session 1)
+- **M0 done** — docs, handbook, agents/skills, Vite 8 + Svelte 5 + Pixi 8 scaffold, Night Desk shell, Feel Lab.
+- **M1 done** — pure engine: numbers, 7 numbering systems (normalised), cards-as-generators, one-pass
+  `derive`, 20 Hz `step` + `applyOffline` (reuses step), save v1 (defensive, migrations), run upgrades +
+  milestones as Zod-validated JSON. 56 tests.
+- **M2 mostly done** — Klondike module + registry + greedy autoplay (22/60 wins); Pixi table with
+  tap / drag / tilt / target glow / throw-catch / return-shake / flip / deal choreography; host seam with
+  loop, Auto-Dealer, tiered save; synth sounds; real-gesture browser test green. **Open:** win celebration
+  cascade, riffle choreography (sound exists, animation does not), real-iPad drag-feel pass.
+- **Balance is untuned** — the engaged sim reaches ~6B/s in an hour with no prestige sink yet; that is M3's
+  job (Cut the Deck + Constellation + pacing tests). Run `npm run sim -- 1 engaged` to see the curve.
+- Next: M3 (see `docs/08-roadmap.md`).

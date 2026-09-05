@@ -1,0 +1,67 @@
+{
+  "$comment": "All interaction-feel constants. See docs/05-feel.md. Edit live in the Feel Lab; export here.",
+  "tapMaxMs": 220,
+  "dragThresholdPx": 6,
+  "doubleTapMs": 280,
+  "longPressMs": 450,
+
+  "liftScale": 1.06,
+  "liftResponse": 0.12,
+  "liftDamping": 1.0,
+  "shadowLiftPx": 14,
+  "shadowBaseAlpha": 0.35,
+  "runLagMs": 12,
+
+  "followResponse": 0.045,
+  "followDamping": 1.0,
+  "tiltGain": 0.0009,
+  "tiltMaxRad": 0.18,
+  "tiltResponse": 0.15,
+  "tiltDamping": 0.9,
+
+  "targetGlowAlpha": 0.35,
+  "magnetRadiusPx": 60,
+  "targetMagnetScale": 1.02,
+
+  "placeResponse": 0.18,
+  "placeDamping": 0.82,
+  "returnResponse": 0.28,
+  "returnDamping": 0.9,
+  "illegalShakePx": 4,
+
+  "throwMinPxPerS": 900,
+  "throwMaxPxPerS": 6000,
+  "throwFriction": 0.985,
+  "throwCatchRadiusPx": 70,
+  "catchResponse": 0.22,
+  "throwSpinGain": 0.0004,
+
+  "autoMoveResponse": 0.22,
+  "autoMoveDamping": 0.9,
+  "arcHeightPx": 24,
+
+  "flipResponse": 0.16,
+  "flipLift": 1.04,
+
+  "dealIntervalMs": 38,
+  "dealResponse": 0.26,
+  "dealDamping": 0.86,
+
+  "riffleDurationMs": 1100,
+  "overhandDurationMs": 1400,
+
+  "btnPressScale": 0.96,
+  "btnPressResponse": 0.08,
+  "btnReleaseDamping": 0.7,
+  "holdInitialMs": 400,
+  "holdStartHz": 3,
+  "holdMaxHz": 20,
+  "holdRampMs": 1800,
+  "toggleResponse": 0.14,
+  "toggleDamping": 0.75,
+
+  "pitchJitter": 0.04,
+  "haptics": { "tick": [8], "soft": [15], "thud": [25], "success": [10, 40, 15] },
+
+  "reducedMotionResponseScale": 0.5
+}

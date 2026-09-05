@@ -11,6 +11,12 @@ import { buildCardTextures, destroyCardTextures, type CardTextures } from './car
 import { layoutBoard, rectContains, rectCenter, rectDistance, type Layout } from './layout';
 import { clamp } from './spring';
 
+/** Event time in ms. Uses the native event's timestamp (accurate even when a frame ran long) with a fallback. */
+function stamp(e: FederatedPointerEvent): number {
+  const t = (e.nativeEvent as Event | undefined)?.timeStamp;
+  return typeof t === 'number' && t > 0 ? t : performance.now();
+}
+
 export interface TableHost {
   canPickUp(pile: string, index: number): boolean;
   legalTargets(pile: string, index: number): string[];
@@ -59,8 +65,8 @@ export class Table {
   private slotLayer = new Container();
   private cardLayer = new Container();
   private dragLayer = new Container();
-  private felt = new Graphics();
-  private lamp = new Graphics();
+  private felt = new Sprite();
+  private feltTex: Texture | null = null;
   private sprites = new Map<CardId, CardSprite>();
   private anon: CardSprite[] = []; // sprites for face-down cards without ids (legacy modules)
   private slots = new Map<string, Sprite>();
@@ -83,6 +89,9 @@ export class Table {
   feel: Feel;
   host: TableHost;
   reducedMotion = false;
+  /** What the last pointer release decided — shown in the Feel Lab and read by gesture tests. */
+  lastGesture: { kind: 'tap' | 'place' | 'throw' | 'return' | 'none'; speed: number; held: number; moved: boolean; target?: string } =
+    { kind: 'none', speed: 0, held: 0, moved: false };
 
   constructor(host: TableHost, feel: Feel) {
     this.host = host;
@@ -100,7 +109,7 @@ export class Table {
     });
     parent.appendChild(this.app.canvas);
     this.app.canvas.style.touchAction = 'none';
-    this.root.addChild(this.felt, this.lamp, this.slotLayer, this.cardLayer, this.dragLayer);
+    this.root.addChild(this.felt, this.slotLayer, this.cardLayer, this.dragLayer);
     this.app.stage.addChild(this.root);
     this.app.stage.eventMode = 'static';
     this.app.stage.hitArea = { contains: () => true };
@@ -149,22 +158,41 @@ export class Table {
     if (this.view) this.setBoard(this.view, { instant: true, relayout: true });
   }
 
+  /**
+   * The felt, vignette and lamp pool are baked into ONE texture per resize (a 2D-canvas gradient), so
+   * the background costs a single quad per frame instead of many large alpha fills. Matters on
+   * software GL (headless tests) and on older iPads alike.
+   */
   private drawFelt(): void {
-    const w = this.width, h = this.height;
-    this.felt.clear().rect(0, 0, w, h).fill({ color: 0x1f3a34 });
-    // Vignette edges.
-    const steps = 6;
-    for (let i = 0; i < steps; i++) {
-      const inset = i * Math.min(w, h) * 0.012;
-      this.felt.roundRect(inset, inset, w - inset * 2, h - inset * 2, 24).stroke({ color: 0x162925, alpha: 0.10 + i * 0.03, width: Math.min(w, h) * 0.02 });
-    }
-    // Lamp pool: soft warm ellipse, upper-left leaning.
-    this.lamp.clear();
-    const cx = w * 0.42, cy = h * 0.38;
-    for (let i = 8; i >= 1; i--) {
-      const r = (Math.max(w, h) * 0.75 * i) / 8;
-      this.lamp.ellipse(cx, cy, r, r * 0.72).fill({ color: 0xffd9a0, alpha: 0.012 });
-    }
+    const w = Math.max(1, Math.round(this.width)), h = Math.max(1, Math.round(this.height));
+    const scale = 0.5; // background is soft; half-res is invisible and 4× cheaper
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(w * scale));
+    c.height = Math.max(1, Math.round(h * scale));
+    const g = c.getContext('2d');
+    if (!g) return;
+    g.scale(scale, scale);
+    g.fillStyle = '#1f3a34';
+    g.fillRect(0, 0, w, h);
+    // Lamp pool: warm radial glow, upper-left leaning.
+    const lamp = g.createRadialGradient(w * 0.42, h * 0.36, 10, w * 0.42, h * 0.36, Math.max(w, h) * 0.7);
+    lamp.addColorStop(0, 'rgba(255,217,160,0.10)');
+    lamp.addColorStop(0.5, 'rgba(255,217,160,0.04)');
+    lamp.addColorStop(1, 'rgba(255,217,160,0)');
+    g.fillStyle = lamp;
+    g.fillRect(0, 0, w, h);
+    // Vignette.
+    const vig = g.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.45, w / 2, h / 2, Math.max(w, h) * 0.75);
+    vig.addColorStop(0, 'rgba(22,41,37,0)');
+    vig.addColorStop(1, 'rgba(22,41,37,0.75)');
+    g.fillStyle = vig;
+    g.fillRect(0, 0, w, h);
+    const old = this.feltTex;
+    this.feltTex = Texture.from(c);
+    this.felt.texture = this.feltTex;
+    this.felt.width = w;
+    this.felt.height = h;
+    if (old) old.destroy(true);
   }
 
   /** Push a new board. Sprites reconcile by card id and spring to their new places. */
@@ -340,8 +368,8 @@ export class Table {
       offsetY: y - sp.pos.y.value,
       moved: false,
       targets: pickable ? this.host.legalTargets(sp.pile, sp.index) : [],
-      downAt: performance.now(),
-      samples: [{ t: performance.now(), x, y }],
+      downAt: stamp(e),
+      samples: [{ t: stamp(e), x, y }],
       pointerId: e.pointerId
     };
     if (pickable) {
@@ -372,7 +400,7 @@ export class Table {
     if (!d.moved && Math.hypot(x - d.startX, y - d.startY) > this.feel.dragThresholdPx) d.moved = true;
     if (!d.moved || d.targets.length === 0 && !d.sprites[0]?.pickable) return;
     if (d.targets.length === 0) return; // not pickable: no drag
-    const now = performance.now();
+    const now = stamp(e);
     d.samples.push({ t: now, x, y });
     while (d.samples.length > 8 || (d.samples.length > 2 && now - d.samples[0]!.t > 90)) d.samples.shift();
     this.host.activity();
@@ -420,11 +448,15 @@ export class Table {
     this.drag = null;
     this.updateMagnet(-1e9, -1e9, []);
     const { x, y } = e.global;
-    const held = performance.now() - d.downAt;
+    const held = stamp(e) - d.downAt;
     const first = d.sprites[0];
     if (!first) return;
 
+    const v0 = this.releaseVelocity(d.samples);
+    const speed0 = Math.hypot(v0.x, v0.y);
+    this.lastGesture = { kind: 'none', speed: speed0, held, moved: d.moved };
     if (!d.moved && held < this.feel.tapMaxMs) {
+      this.lastGesture.kind = 'tap';
       // Tap (or double-tap — both do the same thing).
       this.settle(d.sprites);
       this.setTargetGlow(d.targets, 0);
@@ -435,6 +467,7 @@ export class Table {
       return;
     }
     if (d.targets.length === 0) {
+      this.lastGesture.kind = 'return';
       this.settle(d.sprites);
       return;
     }
@@ -443,19 +476,25 @@ export class Table {
     // Over a valid target?
     const over = this.nearestTarget(x, y, d.targets, 0) ?? this.nearestTarget(x, y, d.targets, this.feel.magnetRadiusPx * 0.6);
     if (over) {
+      this.lastGesture.kind = 'place';
+      this.lastGesture.target = over;
       this.place(d, over, 0.5);
       return;
     }
     // Throw?
-    const v = this.releaseVelocity(d.samples);
-    const speed = Math.hypot(v.x, v.y);
+    const v = v0;
+    const speed = speed0;
     if (speed > this.feel.throwMinPxPerS) {
-      this.throwing = { sprites: d.sprites, vx: v.x, vy: v.y, pile: d.pile, index: d.index, targets: d.targets, age: 0 };
+      this.lastGesture.kind = 'throw';
+      // Clamp: a coalesced or synthetic burst can report absurd speeds; real flicks top out ~5000 px/s.
+      const k = Math.min(1, this.feel.throwMaxPxPerS / speed);
+      this.throwing = { sprites: d.sprites, vx: v.x * k, vy: v.y * k, pile: d.pile, index: d.index, targets: d.targets, age: 0 };
       d.sprites.forEach((s) => (s.rot.velocity += v.x * this.feel.throwSpinGain));
       this.host.sound('toss', clamp(speed / 3000, 0.3, 1));
       return;
     }
     // Return home with a shake if a drop was attempted near something.
+    this.lastGesture.kind = 'return';
     this.returnHome(d.sprites, true);
   };
 
@@ -539,9 +578,9 @@ export class Table {
         due.forEach((t) => t.fn());
       }
     }
-    // Lamp breathes.
+    // Lamp breathes (very slowly).
     this.lampPhase += dt;
-    this.lamp.alpha = 1 + Math.sin((this.lampPhase / 9) * Math.PI * 2) * 0.03;
+    this.felt.alpha = 1 - (Math.sin((this.lampPhase / 9) * Math.PI * 2) + 1) * 0.008;
 
     for (const sp of this.sprites.values()) sp.step(dt, this.feel);
     for (const sp of this.anon) sp.step(dt, this.feel);
@@ -553,12 +592,21 @@ export class Table {
       th.vx *= fr;
       th.vy *= fr;
       const lead = th.sprites[0]!;
-      const nx = lead.pos.x.value + th.vx * dt, ny = lead.pos.y.value + th.vy * dt;
-      th.sprites.forEach((s, i) => s.snapTo(nx, ny + i * this.layout!.cardH * 0.28));
-      // Caught by a valid target?
-      const catchId = this.nearestTarget(nx, ny, th.targets, this.feel.throwCatchRadiusPx);
+      const x0 = lead.pos.x.value, y0 = lead.pos.y.value;
+      const nx = x0 + th.vx * dt, ny = y0 + th.vy * dt;
+      // Swept catch test: sample the segment so a fast card cannot jump over a target between frames.
+      const segLen = Math.hypot(nx - x0, ny - y0);
+      const samples = Math.max(1, Math.ceil(segLen / Math.max(20, this.feel.throwCatchRadiusPx * 0.6)));
+      let catchId: string | null = null;
+      let cx = nx, cy = ny;
+      for (let i = 1; i <= samples && !catchId; i++) {
+        const sx = x0 + ((nx - x0) * i) / samples, sy = y0 + ((ny - y0) * i) / samples;
+        catchId = this.nearestTarget(sx, sy, th.targets, this.feel.throwCatchRadiusPx);
+        if (catchId) { cx = sx; cy = sy; }
+      }
+      th.sprites.forEach((s, i) => s.snapTo(cx, cy + i * this.layout!.cardH * 0.28));
       const speed = Math.hypot(th.vx, th.vy);
-      const off = nx < -this.layout.cardW || nx > this.width + this.layout.cardW || ny < -this.layout.cardH || ny > this.height + this.layout.cardH;
+      const off = cx < -this.layout.cardW || cx > this.width + this.layout.cardW || cy < -this.layout.cardH || cy > this.height + this.layout.cardH;
       if (catchId) {
         this.throwing = null;
         th.sprites.forEach((s) => s.pos.configure(this.r(this.feel.catchResponse), 0.8));

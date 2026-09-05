@@ -1,0 +1,12 @@
+import { chromium } from 'playwright-core';
+const CHROME = `${process.env.HOME}/.cache/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-linux64/chrome-headless-shell`;
+const browser = await chromium.launch({ executablePath: CHROME });
+const page = await browser.newPage({ viewport: { width: 1180, height: 820 } });
+page.on('pageerror', (e) => console.error('pageerror', e.message));
+await page.goto(process.argv[2] ?? 'http://127.0.0.1:3000/', { waitUntil: 'networkidle' });
+await page.waitForFunction(() => window.__table);
+await page.waitForTimeout(1500);
+const fps = await page.evaluate(() => window.__table.app.ticker.FPS);
+const gl = await page.evaluate(() => window.__table.app.renderer.name);
+console.log(`renderer=${gl} fps=${fps.toFixed(1)}`);
+await browser.close();

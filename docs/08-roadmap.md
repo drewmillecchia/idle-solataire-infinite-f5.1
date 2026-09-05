@@ -3,21 +3,21 @@
 Vertical slices. Each milestone is playable, survives a reload, and has tests where the seam is
 non-obvious. Status is kept here and in `CLAUDE.md`.
 
-## M0 — Foundation (this session)
+## M0 — Foundation ✅ (2026-09-05)
 - Repo docs, brainstorming, memory, CLAUDE.md, agents, skills.
 - Vite 8 + Svelte 5 + TS strict + PixiJS 8 + PWA scaffold; `npm run dev` on 0.0.0.0:3000.
 - Night Desk tokens; app shell (HUD, felt, rail); Pixi table boots with a deck on the felt.
 - **Exit:** loads on desktop and at 1180×820; a card can be dragged with the spring/tilt feel;
   Feel Lab panel edits `feel.json` live.
 
-## M1 — Pure engine
+## M1 — Pure engine ✅ (2026-09-05)
 - `Decimal` wiring; `numbers.ts` formatter (short scale → scientific → layered).
 - Cards-as-generators (`awake`, `charge`), Natural numbering with normalisation machinery.
 - One-pass `derive`; 20 Hz `step`; `applyOffline` reusing `step`; milestone cascade.
 - State + save v1 (IndexedDB + localStorage + export) with defensive load + migrations.
 - **Exit:** headless: a woken card raises rate; N s offline ≡ N s live; save round-trips.
 
-## M2 — Klondike you can play
+## M2 — Klondike you can play ◐ (2026-09-05: playable, gesture-tested; win cascade + riffle animation open)
 - `GameModule` contract + registry; immutable Klondike rules; seeded deals; undo.
 - Table renders `BoardView`; tap-to-move, drag, throw-catch, flip, deal choreography.
 - Home play wakes/charges; win → burst + non-modal cascade. Auto-Dealer (greedy + cycle detect).

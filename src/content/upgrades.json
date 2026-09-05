@@ -1,0 +1,111 @@
+[
+  {
+    "id": "steadier-hands",
+    "name": "Steadier Hands",
+    "blurb": "A calmer grip. Every card pays a little more.",
+    "baseCost": "25",
+    "growth": 1.18,
+    "max": null,
+    "effect": { "kind": "globalMult", "per": 0.25 }
+  },
+  {
+    "id": "warm-hearts",
+    "name": "Warm Hearts",
+    "blurb": "The Hearts know each other. They pay better for it.",
+    "baseCost": "60",
+    "growth": 1.22,
+    "max": null,
+    "effect": { "kind": "suitMult", "suit": "H", "per": 0.5 },
+    "revealAfter": { "awake": 2 }
+  },
+  {
+    "id": "sharp-spades",
+    "name": "Sharp Spades",
+    "blurb": "The Spades hold an edge. It shows in the count.",
+    "baseCost": "60",
+    "growth": 1.22,
+    "max": null,
+    "effect": { "kind": "suitMult", "suit": "S", "per": 0.5 },
+    "revealAfter": { "awake": 5 }
+  },
+  {
+    "id": "clear-diamonds",
+    "name": "Clear Diamonds",
+    "blurb": "The Diamonds catch the light. Nothing is lost in it.",
+    "baseCost": "60",
+    "growth": 1.22,
+    "max": null,
+    "effect": { "kind": "suitMult", "suit": "D", "per": 0.5 },
+    "revealAfter": { "awake": 9 }
+  },
+  {
+    "id": "green-clubs",
+    "name": "Green Clubs",
+    "blurb": "The Clubs grow steadily, given room.",
+    "baseCost": "60",
+    "growth": 1.22,
+    "max": null,
+    "effect": { "kind": "suitMult", "suit": "C", "per": 0.5 },
+    "revealAfter": { "awake": 13 }
+  },
+  {
+    "id": "patience",
+    "name": "Patience",
+    "blurb": "Every return trip counts for a little more.",
+    "baseCost": "200",
+    "growth": 1.3,
+    "max": null,
+    "effect": { "kind": "chargeMult", "per": 0.05 },
+    "revealAfter": { "awake": 13 }
+  },
+  {
+    "id": "full-table",
+    "name": "Full Table",
+    "blurb": "A fuller table lifts everyone at it.",
+    "baseCost": "500",
+    "growth": 1.35,
+    "max": 20,
+    "effect": { "kind": "awakeMult", "per": 1.0 },
+    "revealAfter": { "awake": 26 }
+  },
+  {
+    "id": "devotion",
+    "name": "Devotion",
+    "blurb": "The cards remember how often you come back.",
+    "baseCost": "1500",
+    "growth": 1.4,
+    "max": null,
+    "effect": { "kind": "devotionMult", "per": 0.4 },
+    "revealAfter": { "homed": 50 }
+  },
+  {
+    "id": "bright-finish",
+    "name": "Bright Finish",
+    "blurb": "A won hand should feel like one.",
+    "baseCost": "800",
+    "growth": 1.5,
+    "max": 10,
+    "effect": { "kind": "burstMult", "per": 0.5 },
+    "revealAfter": { "homed": 20 }
+  },
+  {
+    "id": "long-evening",
+    "name": "Long Evening",
+    "blurb": "The lamp stays lit longer than you do.",
+    "baseCost": "5000",
+    "growth": 3,
+    "max": 8,
+    "effect": { "kind": "offlineHours", "add": 2 },
+    "revealAfter": { "lifetimeShuffles": "500000" }
+  },
+  {
+    "id": "the-dealer",
+    "name": "The Dealer",
+    "blurb": "Someone else can deal for a while.",
+    "baseCost": "2500",
+    "growth": 1,
+    "max": 1,
+    "effect": { "kind": "autoDealer" },
+    "revealAfter": { "awake": 52 }
+  }
+]

@@ -1,0 +1,92 @@
+[
+  {
+    "id": "thousand",
+    "value": "1e3",
+    "label": "a thousand",
+    "ledger": "The first thousand. The lamp is warm. — K."
+  },
+  {
+    "id": "million",
+    "value": "1e6",
+    "label": "a million",
+    "ledger": "A million arrangements. My predecessor said this takes a year by hand. It took an evening."
+  },
+  {
+    "id": "billion",
+    "value": "1e9",
+    "label": "a billion",
+    "ledger": "More orderings than there are people. Each one a hand no one has ever held."
+  },
+  {
+    "id": "neurons",
+    "value": "8.6e10",
+    "label": "neurons in a brain",
+    "ledger": "About as many as the thoughts you could have about them."
+  },
+  {
+    "id": "trillion",
+    "value": "1e12",
+    "label": "a trillion",
+    "ledger": "The deck does most of this now. I mostly watch."
+  },
+  {
+    "id": "grains-of-sand",
+    "value": "7.5e18",
+    "label": "grains of sand on Earth's beaches",
+    "ledger": "Every grain. I have never been to a beach with this many."
+  },
+  {
+    "id": "sextillion",
+    "value": "1e21",
+    "label": "a sextillion",
+    "ledger": "The old ledgers stop here. The Keeper before me ran out of ink, or patience."
+  },
+  {
+    "id": "observable-stars",
+    "value": "1e24",
+    "label": "stars in the observable universe",
+    "ledger": "The window is getting crowded."
+  },
+  {
+    "id": "atoms-human-body",
+    "value": "7e27",
+    "label": "atoms in a human body",
+    "ledger": "You, arranged every way. Most of them would not be you."
+  },
+  {
+    "id": "nonillion",
+    "value": "1e30",
+    "label": "a nonillion",
+    "ledger": "A nonillion. The word sounds made up. It isn't."
+  },
+  {
+    "id": "counting-stops",
+    "value": "1e40",
+    "label": "past easy naming",
+    "ledger": "Somewhere here the counting stops feeling like counting."
+  },
+  {
+    "id": "atoms-earth",
+    "value": "1e50",
+    "label": "atoms in the Earth",
+    "ledger": "The whole planet, one atom per arrangement. Still not close."
+  },
+  {
+    "id": "atoms-solar-system",
+    "value": "1e57",
+    "label": "atoms in the solar system",
+    "ledger": "I have started to suspect the lamp is not a lamp."
+  },
+  {
+    "id": "fifty-two-factorial",
+    "value": "8.07e67",
+    "label": "52!",
+    "ledger": "Every hand. Every one. — And there is a knock at the door."
+  },
+  {
+    "id": "atoms-observable-universe",
+    "value": "1e80",
+    "label": "atoms in the observable universe",
+    "ledger": "The new deck has a card I don't recognise."
+  }
+]

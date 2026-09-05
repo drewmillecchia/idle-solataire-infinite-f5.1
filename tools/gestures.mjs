@@ -143,6 +143,49 @@ step(`dealt: stock ${before.stock}, tableau ${before.tableau.map((t) => `${t.dow
   step(`rate ${r.before}/s, awake ${r.awakeBefore}, homed ${r.homed}`);
 }
 
+// 6. Throw: flick a card toward a legal target and release well short of it; the catch radius should land it.
+{
+  const mv = await page.evaluate(() => {
+    const g = window.__game; const t = { isWild: () => false, isMirror: () => false, dealtFaceUp: () => false };
+    const v = g.module.view(g.board);
+    for (const p of v.piles) {
+      if (!p.id.startsWith('t') || p.pickableFrom === undefined) continue;
+      for (let i = p.pickableFrom; i < p.cards.length; i++) {
+        const targets = g.module.legalTargets(g.board, p.id, i, t).filter((x) => x !== p.id);
+        if (targets.length) return { pile: p.id, index: i, to: targets[0] };
+      }
+    }
+    return null;
+  });
+  if (!mv) step('no throw candidate; skipped');
+  else {
+    const from = await point(mv.pile, mv.index);
+    const to = await point(mv.to);
+    const dx = to.x - from.x, dy = to.y - from.y, len = Math.hypot(dx, dy);
+    // Release at 55% of the way, fast. Playwright's mouse.move round-trips are too slow for a flick
+    // (~500 ms each in headless), so dispatch PointerEvents on the canvas directly with ~10 ms spacing.
+    await page.evaluate(async ({ from, dx, dy }) => {
+      const c = document.querySelector('canvas');
+      const box = c.getBoundingClientRect();
+      const ev = (type, x, y) => c.dispatchEvent(new PointerEvent(type, { pointerId: 7, pointerType: 'touch', isPrimary: true, clientX: x, clientY: y, bubbles: true, cancelable: true, button: 0, buttons: type === 'pointerup' ? 0 : 1 }));
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+      // Headless software GL runs ~15 fps, so any real wait inflates the gesture; keep it near-synchronous
+      // and let the table's speed clamp make it a plausible flick.
+      // Fully synchronous: any yield lets a slow frame run and the flick becomes a slow drag.
+      ev('pointerdown', from.x, from.y);
+      for (let i = 1; i <= 4; i++) ev('pointermove', from.x + dx * 0.55 * (i / 4), from.y + dy * 0.55 * (i / 4));
+      ev('pointerup', from.x + dx * 0.55, from.y + dy * 0.55);
+      void box; void sleep;
+    }, { from, dx, dy });
+    await page.waitForTimeout(1500);
+    const after = await board();
+    const lg = await page.evaluate(() => window.__table.lastGesture);
+    if (after.moves <= before.moves) fail(`throw ${mv.pile}[${mv.index}] -> ${mv.to} (${Math.round(len)}px) was not caught; lastGesture=${JSON.stringify(lg)}`);
+    else step(`throw ${mv.pile}[${mv.index}] -> ${mv.to} caught (moves ${before.moves} -> ${after.moves})`);
+    before = after;
+  }
+}
+
 await page.screenshot({ path: 'tools/out/gestures.png' });
 await browser.close();
 if (errors.length) { console.error(errors.join('\n')); process.exitCode = 1; }

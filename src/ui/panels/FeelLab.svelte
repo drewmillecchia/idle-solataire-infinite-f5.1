@@ -7,7 +7,7 @@
     { title: 'Tap & drag', keys: ['tapMaxMs', 'dragThresholdPx', 'liftScale', 'liftResponse', 'shadowLiftPx', 'runLagMs', 'followResponse', 'followDamping'] },
     { title: 'Tilt', keys: ['tiltGain', 'tiltMaxRad', 'tiltResponse', 'tiltDamping'] },
     { title: 'Drop & return', keys: ['placeResponse', 'placeDamping', 'returnResponse', 'returnDamping', 'illegalShakePx', 'magnetRadiusPx', 'targetGlowAlpha'] },
-    { title: 'Throw', keys: ['throwMinPxPerS', 'throwFriction', 'throwCatchRadiusPx', 'catchResponse', 'throwSpinGain'] },
+    { title: 'Throw', keys: ['throwMinPxPerS', 'throwMaxPxPerS', 'throwFriction', 'throwCatchRadiusPx', 'catchResponse', 'throwSpinGain'] },
     { title: 'Flip & deal', keys: ['flipResponse', 'flipLift', 'dealIntervalMs', 'dealResponse', 'dealDamping'] },
     { title: 'Buttons', keys: ['btnPressScale', 'btnPressResponse', 'holdInitialMs', 'holdStartHz', 'holdMaxHz', 'holdRampMs'] }
   ];
@@ -15,7 +15,7 @@
     tapMaxMs: [80, 500, 10], dragThresholdPx: [1, 30, 1], liftScale: [1, 1.3, 0.005], liftResponse: [0.03, 0.6, 0.005], shadowLiftPx: [0, 40, 1], runLagMs: [0, 80, 1],
     followResponse: [0.01, 0.4, 0.005], followDamping: [0.3, 1.5, 0.05], tiltGain: [0, 0.004, 0.0001], tiltMaxRad: [0, 0.6, 0.01], tiltResponse: [0.03, 0.6, 0.01], tiltDamping: [0.3, 1.5, 0.05],
     placeResponse: [0.05, 0.6, 0.01], placeDamping: [0.3, 1.5, 0.02], returnResponse: [0.05, 0.8, 0.01], returnDamping: [0.3, 1.5, 0.02], illegalShakePx: [0, 20, 1], magnetRadiusPx: [0, 160, 2], targetGlowAlpha: [0, 1, 0.02],
-    throwMinPxPerS: [200, 3000, 50], throwFriction: [0.9, 0.999, 0.001], throwCatchRadiusPx: [0, 200, 2], catchResponse: [0.05, 0.6, 0.01], throwSpinGain: [0, 0.002, 0.0001],
+    throwMinPxPerS: [200, 3000, 50], throwMaxPxPerS: [1000, 12000, 100], throwFriction: [0.9, 0.999, 0.001], throwCatchRadiusPx: [0, 200, 2], catchResponse: [0.05, 0.6, 0.01], throwSpinGain: [0, 0.002, 0.0001],
     flipResponse: [0.05, 0.5, 0.01], flipLift: [1, 1.2, 0.005], dealIntervalMs: [0, 120, 2], dealResponse: [0.05, 0.6, 0.01], dealDamping: [0.3, 1.5, 0.02],
     btnPressScale: [0.8, 1, 0.005], btnPressResponse: [0.02, 0.3, 0.005], holdInitialMs: [100, 1000, 10], holdStartHz: [1, 10, 0.5], holdMaxHz: [5, 40, 1], holdRampMs: [300, 5000, 50]
   };
