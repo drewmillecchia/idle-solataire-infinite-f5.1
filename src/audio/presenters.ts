@@ -128,6 +128,19 @@ export function sound(name: string, velocity = 0.5): void {
       thud(0.12, 1.1);
       break;
     }
+    case 'cut': {
+      // A slower, heavier riffle for the ceremony, with a low resolving tone underneath.
+      const n = 30;
+      for (let i = 0; i < n; i++) {
+        const t = 0.05 + (i / n) * 1.35 + Math.random() * 0.015;
+        burst({ dur: 0.035, freq: 3200 * jitter(0.15), q: 3, gain: 0.05 + v * 0.05, when: t });
+        burst({ dur: 0.035, freq: 2500 * jitter(0.15), q: 3, gain: 0.04 + v * 0.04, when: t + 0.02 });
+      }
+      tone(130.81, 1.8, 0.03, 0.1);
+      tone(196.0, 1.6, 0.02, 0.6);
+      thud(0.14, 1.5);
+      break;
+    }
     case 'square':
       thud(0.08); thud(0.08, 0.09); thud(0.10, 0.18);
       break;

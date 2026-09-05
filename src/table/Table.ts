@@ -400,6 +400,83 @@ export class Table {
     });
   }
 
+  /**
+   * Cut the Deck ceremony: every card gathers, the lamp dims, the deck is cut in two and the halves
+   * change places (a real cut), then a slow riffle. Calls `onDone` when the host may deal the new run.
+   */
+  cutCeremony(onDone: () => void): void {
+    if (!this.layout) { onDone(); return; }
+    this.cancelChoreography();
+    const cx = this.width / 2, cy = this.height * 0.45;
+    const all = [...this.sprites.values()];
+    const cardH = this.layout.cardH;
+    all.forEach((sp, i) => {
+      this.cardLayer.addChild(sp);
+      sp.zIndex = i;
+      sp.setFaceUp(false);
+      sp.lift.target = 0; sp.scaleS.target = 1; sp.alpha = 1;
+      sp.pos.configure(this.r(0.45), 0.9);
+      sp.pos.setTarget(cx + (Math.random() - 0.5) * 2, cy + (Math.random() - 0.5) * 2);
+      sp.rot.target = (Math.random() - 0.5) * 0.04;
+    });
+    this.cardLayer.sortChildren();
+    this.host.sound('slide', 0.5);
+    // Lamp dims while the deck is in hand.
+    this.lampDim = 0.35;
+    // The cut: top half lifts and moves aside, bottom half slides under, halves swap.
+    const half = Math.floor(all.length / 2);
+    this.later(0.7, () => {
+      all.forEach((sp, i) => {
+        const top = i >= half;
+        sp.pos.configure(this.r(0.3), 0.85);
+        sp.pos.setTarget(cx + (top ? cardH * 0.55 : -cardH * 0.15), cy + (top ? -cardH * 0.35 : cardH * 0.1));
+        if (top) sp.lift.target = 0.8;
+      });
+      this.host.sound('square', 0.5);
+    });
+    this.later(1.25, () => {
+      all.forEach((sp, i) => {
+        const top = i >= half;
+        sp.zIndex = top ? i - half : i + half; // the halves swap
+        sp.pos.setTarget(cx, cy);
+        sp.lift.target = 0;
+      });
+      this.cardLayer.sortChildren();
+      this.host.sound('place', 0.6);
+      this.host.haptic('thud');
+    });
+    // A slow, ceremonial riffle.
+    const riffleStart = 1.9;
+    const total = (this.feel.riffleDurationMs / 1000) * 1.6;
+    const split = this.layout.cardW * 0.62;
+    this.later(riffleStart - 0.3, () => {
+      all.forEach((sp, i) => {
+        const left = i % 2 === 0;
+        sp.pos.configure(this.r(0.2), 0.85);
+        sp.pos.setTarget(cx + (left ? -split : split), cy + (left ? 6 : -6));
+        sp.rot.target = left ? -0.09 : 0.09;
+      });
+    });
+    const order = all.slice().sort(() => Math.random() - 0.5);
+    order.forEach((sp, k) => {
+      this.later(riffleStart + (k / order.length) * total * 0.8, () => {
+        sp.pos.configure(this.r(0.14), 0.8);
+        sp.pos.setTarget(cx, cy);
+        sp.rot.target = (Math.random() - 0.5) * 0.03;
+        sp.zIndex = 100 + k;
+        this.cardLayer.sortChildren();
+      });
+    });
+    this.later(riffleStart, () => this.host.sound('cut', 0.8));
+    this.later(riffleStart + total * 0.8 + 0.3, () => {
+      all.forEach((sp) => { sp.rot.target = 0; sp.pos.setTarget(cx, cy); });
+      this.lampDim = 0;
+      this.host.sound('chime', 0.7);
+    });
+    this.later(riffleStart + total * 0.8 + 0.9, () => onDone());
+  }
+  private lampDim = 0;
+
   /** Win celebration: foundation cards leap off and tumble across the felt, bouncing on the table edge. */
   celebrate(): void {
     if (!this.layout || !this.view) return;
@@ -772,7 +849,9 @@ export class Table {
     this.stepCelebration(dt);
     // Lamp breathes (very slowly).
     this.lampPhase += dt;
-    this.felt.alpha = 1 - (Math.sin((this.lampPhase / 9) * Math.PI * 2) + 1) * 0.008;
+    const breathe = 1 - (Math.sin((this.lampPhase / 9) * Math.PI * 2) + 1) * 0.008;
+    const dimTarget = breathe * (1 - this.lampDim);
+    this.felt.alpha += (dimTarget - this.felt.alpha) * Math.min(1, dt * 3);
 
     for (const sp of this.sprites.values()) sp.step(dt, this.feel);
     for (const sp of this.anon) sp.step(dt, this.feel);
