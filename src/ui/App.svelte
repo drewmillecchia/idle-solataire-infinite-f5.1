@@ -38,6 +38,9 @@
         <button onclick={() => host.dismissOffline()}>Noted</button>
       </div>
     {/if}
+    {#if host.view.storageWarning}
+      <div class="offline warn"><p>This browser is not keeping the save. Export it from Settings to be safe.</p></div>
+    {/if}
     {#if host.view.wonBanner}
       <div class="won">
         <p class="won-title">Hand won.</p>
@@ -69,6 +72,7 @@
     display: flex; gap: 12px; align-items: center; box-shadow: var(--shadow); max-width: 80%;
   }
   .offline p { margin: 0; }
+  .warn { top: auto; bottom: 14px; background: var(--rouge); color: var(--paper); }
   .won {
     position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%);
     background: var(--paper); color: var(--ink); padding: 18px 26px; border-radius: var(--radius);

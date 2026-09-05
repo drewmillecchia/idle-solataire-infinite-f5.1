@@ -20,7 +20,7 @@
   </div>
   <div class="right">
     <HoldButton label="Undo" disabled={!host.view.canUndo} feel={host.feel} onpress={() => host.undo()} />
-    <HoldButton label="New hand" primary feel={host.feel} onpress={() => host.newHand()} />
+    <HoldButton label="New hand" primary disabled={host.view.cut.cutting} feel={host.feel} onpress={() => host.newHand()} />
   </div>
 </footer>
 

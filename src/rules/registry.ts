@@ -4,8 +4,10 @@
 import type { GameModule } from './module';
 import { klondike } from './games/klondike';
 import { tripeaks } from './games/tripeaks';
+import { golf } from './games/golf';
+import { pyramid } from './games/pyramid';
 
-export const GAMES: GameModule<any>[] = [klondike, tripeaks];
+export const GAMES: GameModule<any>[] = [klondike, tripeaks, golf, pyramid];
 
 export function gameById(id: string): GameModule<any> | undefined {
   return GAMES.find((g) => g.id === id);

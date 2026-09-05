@@ -61,6 +61,12 @@ export function homeCard(state: GameState, bus: EventBus, card: CardId, pile: st
   const c = state.cards[card];
   if (!c) throw new RangeError(`bad card id ${card}`);
 
+  // A card pays for coming home ONCE per hand. Klondike lets a foundation card return to the tableau
+  // and come back; without this, two taps repeated forever would farm charge and sparks (review #1).
+  const hand = state.run.hand;
+  if (hand.homedThisHand.includes(card)) return;
+  hand.homedThisHand.push(card);
+
   const first = !c.awake;
   if (first) {
     c.awake = true;

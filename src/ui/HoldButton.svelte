@@ -12,6 +12,10 @@
   let holdTimer: number | null = null;
   let holdStart = 0;
   let fired = false;
+  let cancelled = false;
+  const stopHold = () => { if (holdTimer !== null) { clearTimeout(holdTimer); holdTimer = null; } };
+  // The repeat chain must die with the component (a finger can be held while the panel unmounts).
+  $effect(() => () => stopHold());
 
   function schedule(): void {
     const elapsed = performance.now() - holdStart - feel.holdInitialMs;
@@ -28,10 +32,12 @@
   }
 
   function down(e: PointerEvent): void {
-    if (disabled) return;
+    if (disabled || pressed) return; // a second finger on the same button is ignored
+    stopHold();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     pressed = true;
     fired = false;
+    cancelled = false;
     haptic('tick');
     sound('tick', 0.4);
     if (repeat) {
@@ -39,10 +45,17 @@
       holdTimer = window.setTimeout(() => { fired = true; onrepeat?.(feel.holdStartHz); schedule(); }, feel.holdInitialMs);
     }
   }
+  function cancel(): void {
+    if (!pressed) return;
+    cancelled = true;
+    pressed = false;
+    stopHold();
+  }
   function up(e: PointerEvent): void {
     if (!pressed) return;
     pressed = false;
-    if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+    stopHold();
+    if (cancelled) return;
     const inside = (e.currentTarget as HTMLElement).contains(document.elementFromPoint(e.clientX, e.clientY));
     if (!fired && inside && !disabled) onpress();
     if (fired) haptic('soft');
@@ -54,7 +67,7 @@
   {disabled}
   style:--press-scale={feel.btnPressScale}
   style:--press-ms={`${feel.btnPressResponse * 1000}ms`}
-  onpointerdown={down} onpointerup={up} onpointercancel={up} onlostpointercapture={up}
+  onpointerdown={down} onpointerup={up} onpointercancel={cancel} onlostpointercapture={cancel}
 >{label}</button>
 
 <style>

@@ -2,10 +2,12 @@
  * Tiered local persistence: IndexedDB + localStorage mirror (ADR-009). Loading prefers the copy whose
  * `progress` (lifetimeShuffles decimal string) is greater; ties → IDB. Never throws to callers.
  */
+import Decimal from 'break_eternity.js';
+
 const DB_NAME = 'isi';
 const STORE = 'saves';
 const KEY = 'main';
-const LS_KEY = 'isi.save.v1';
+const LS_KEY = 'isi.save'; // the payload carries its own version; the key must not
 
 export interface StoredSave {
   json: string;
@@ -13,18 +15,29 @@ export interface StoredSave {
   savedAt: number;
 }
 
+let dbPromise: Promise<IDBDatabase | null> | null = null;
+
+/** One connection for the page's lifetime (the 5 s autosave used to open a fresh one every time). */
 function openDb(): Promise<IDBDatabase | null> {
-  return new Promise((resolve) => {
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve) => {
     try {
       if (typeof indexedDB === 'undefined') return resolve(null);
       const req = indexedDB.open(DB_NAME, 1);
       req.onupgradeneeded = () => req.result.createObjectStore(STORE);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => resolve(null);
+      req.onsuccess = () => {
+        const db = req.result;
+        db.onclose = () => { dbPromise = null; };
+        db.onversionchange = () => { db.close(); dbPromise = null; };
+        resolve(db);
+      };
+      req.onerror = () => { dbPromise = null; resolve(null); };
     } catch {
+      dbPromise = null;
       resolve(null);
     }
   });
+  return dbPromise;
 }
 
 async function idbGet(): Promise<StoredSave | null> {
@@ -51,6 +64,7 @@ async function idbPut(save: StoredSave): Promise<boolean> {
       tx.objectStore(STORE).put(save, KEY);
       tx.oncomplete = () => resolve(true);
       tx.onerror = () => resolve(false);
+      tx.onabort = () => resolve(false); // QuotaExceededError / eviction mid-write abort, they do not error
     } catch {
       resolve(false);
     }
@@ -74,14 +88,18 @@ function lsPut(save: StoredSave): boolean {
   }
 }
 
-/** Compare two decimal strings that may be in scientific notation. Positive if a > b. */
-function cmpProgress(a: string, b: string): number {
-  const na = Number(a), nb = Number(b);
-  if (Number.isFinite(na) && Number.isFinite(nb)) return na === nb ? 0 : na > nb ? 1 : -1;
-  // Fall back to exponent parsing for astronomically large values.
-  const ea = /e([+-]?\d+)/i.exec(a)?.[1], eb = /e([+-]?\d+)/i.exec(b)?.[1];
-  if (ea && eb) return Number(ea) - Number(eb);
-  return a.length - b.length;
+/** Compare two break_eternity strings (any layer). Positive if a > b. Garbage sorts lowest. */
+export function cmpProgress(a: string, b: string): number {
+  const da = safeDecimal(a), db = safeDecimal(b);
+  return da.cmp(db);
+}
+function safeDecimal(s: string): Decimal {
+  try {
+    const d = new Decimal(s);
+    return Number.isNaN(d.mag) ? new Decimal(-1) : d;
+  } catch {
+    return new Decimal(-1);
+  }
 }
 
 export async function loadSave(): Promise<StoredSave | null> {
@@ -118,6 +136,7 @@ export async function clearSaves(): Promise<void> {
       tx.objectStore(STORE).delete(KEY);
       tx.oncomplete = () => resolve();
       tx.onerror = () => resolve();
+      tx.onabort = () => resolve();
     } catch {
       resolve();
     }

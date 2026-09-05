@@ -29,7 +29,7 @@ const TWIN_DEPTH_CAP = 2;
 function handState(state: GameState): HandState {
   const hand = state.run.hand;
   if (!hand || !Array.isArray(hand.echoRanks) || !Array.isArray(hand.homedThisHand)) {
-    state.run.hand = { echoRanks: [], homedThisHand: [] };
+    state.run.hand = { echoRanks: [], homedThisHand: [], roll: 1 };
     return state.run.hand;
   }
   return hand;
@@ -47,7 +47,7 @@ function fired(bus: EventBus, mark: string, card: CardId, depth: number): void {
  */
 function onHome(state: GameState, bus: EventBus, card: CardId): void {
   const hand = handState(state);
-  hand.homedThisHand.push(card);
+  if (!hand.homedThisHand.includes(card)) hand.homedThisHand.push(card);
   const rank = cardDef(card).rank;
 
   const armed = hand.echoRanks.indexOf(rank);

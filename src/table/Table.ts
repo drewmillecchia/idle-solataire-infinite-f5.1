@@ -2,13 +2,13 @@
  * The PixiJS card table. Game-agnostic: consumes a BoardView and a TableHost. Owns feel.
  * Nothing here knows what Klondike is.
  */
-import { Application, Container, Graphics, Sprite, Texture, type FederatedPointerEvent } from 'pixi.js';
+import { Application, Container, Sprite, Texture, type FederatedPointerEvent } from 'pixi.js';
 import type { BoardView } from '$rules/module';
 import type { CardId } from '$engine/types';
 import type { Feel } from '$content/index';
 import { CardSprite } from './CardSprite';
 import { buildCardTextures, destroyCardTextures, type CardTextures } from './cardFaces';
-import { layoutBoard, rectContains, rectCenter, rectDistance, type Layout } from './layout';
+import { layoutBoard, rectDistance, type Layout } from './layout';
 import { clamp } from './spring';
 
 /** Event time in ms. Uses the native event's timestamp (accurate even when a frame ran long) with a fallback. */
@@ -79,8 +79,6 @@ export class Table {
   private height = 0;
   private dpr = Math.min(3, globalThis.devicePixelRatio || 1);
   private ready = false;
-  private lastTapAt = 0;
-  private lastTapKey = '';
   private lampPhase = 0;
   private pendingView: BoardView | null = null;
   private texturesBuildingFor = 0;
@@ -110,7 +108,7 @@ export class Table {
       preference: 'webgl',
       // Headless screenshots read the back buffer between frames; keeping it costs little and makes
       // captures deterministic. Only in test/dev builds.
-      preserveDrawingBuffer: import.meta.env.DEV || location.search.includes('test')
+      preserveDrawingBuffer: import.meta.env.DEV || new URLSearchParams(location.search).has('test')
     });
     parent.appendChild(this.app.canvas);
     this.app.canvas.style.touchAction = 'none';
@@ -122,7 +120,10 @@ export class Table {
     this.app.stage.on('pointermove', this.onMove);
     this.app.stage.on('pointerup', this.onUp);
     this.app.stage.on('pointerupoutside', this.onUp);
-    this.app.stage.on('pointercancel', this.onUp);
+    // Pixi 8's EventSystem never dispatches pointercancel; listen on the canvas itself so a system
+    // gesture mid-drag (iPadOS edge swipe, backgrounding) cannot strand the drag forever.
+    this.app.canvas.addEventListener('pointercancel', (ev) => this.abortDrag(ev.pointerId));
+    this.app.canvas.addEventListener('lostpointercapture', (ev) => this.abortDrag(ev.pointerId));
     this.app.ticker.add((t) => this.tick(t.deltaMS / 1000));
     this.app.renderer.on('resize', () => this.onResize());
     this.onResize();
@@ -135,8 +136,9 @@ export class Table {
   }
 
   destroy(): void {
-    this.app.destroy(true, { children: true });
+    this.app.destroy(true, { children: true, texture: true });
     if (this.textures) destroyCardTextures(this.textures);
+    this.feltTex?.destroy(true);
   }
 
   /** Screen-space point (CSS px, relative to the canvas) for a pile — used by gesture tests. */
@@ -156,6 +158,9 @@ export class Table {
   }
 
   private onResize(): void {
+    // A window moved to another display, or an iPad zoom change, changes the DPR.
+    const dpr = Math.min(3, globalThis.devicePixelRatio || 1);
+    if (dpr !== this.dpr) { this.dpr = dpr; this.app.renderer.resolution = dpr; }
     // screen is in logical (CSS) pixels; autoDensity handles the DPR.
     this.width = this.app.screen.width;
     this.height = this.app.screen.height;
@@ -216,6 +221,7 @@ export class Table {
     }
     const layout = layoutBoard(view, this.width, this.height);
     this.layout = layout;
+    this.magnetPile = '';
     this.ensureTextures(layout.cardW);
     if (!this.textures) return; // will re-run when textures land
 
@@ -308,8 +314,8 @@ export class Table {
       });
     }
     // Remove sprites for cards no longer on the board (e.g. after Ascension changes the deck).
-    for (const [id, sp] of this.sprites) if (!seen.has(id) && !dragging.has(id)) { sp.destroy(); this.sprites.delete(id); }
-    for (let i = anonIdx; i < this.anon.length; i++) this.anon[i]?.destroy();
+    for (const [id, sp] of this.sprites) if (!seen.has(id) && !dragging.has(id)) { sp.destroy({ children: true }); this.sprites.delete(id); }
+    for (let i = anonIdx; i < this.anon.length; i++) this.anon[i]?.destroy({ children: true });
     this.anon.length = anonIdx;
     this.cardLayer.sortableChildren = true;
     this.cardLayer.sortChildren();
@@ -324,6 +330,8 @@ export class Table {
   private cancelChoreography(): void {
     this.choreo++;
     this.timers = [];
+    if (this.throwing) { const th = this.throwing; this.throwing = null; this.settle(th.sprites); }
+    this.clearHint();
     if (this.celebration) {
       for (const c of this.celebration.sprites) { c.sp.alpha = 1; c.sp.rot.set(0); }
       this.celebration = null;
@@ -551,7 +559,15 @@ export class Table {
     if (this.texturesBuildingFor === px) return;
     this.texturesBuildingFor = px;
     const ids = this.view ? Array.from(new Set(this.view.piles.flatMap((p) => p.cards.map((c) => c.id)).filter((x): x is number => x !== null))) : [];
-    void buildCardTextures(ids.length ? ids : Array.from({ length: 52 }, (_, i) => i), px).then((tex) => {
+    buildCardTextures(ids.length ? ids : Array.from({ length: 52 }, (_, i) => i), px).catch((err: unknown) => {
+      console.error('[table] card textures failed to build; retrying once', err);
+      return buildCardTextures(ids.length ? ids : Array.from({ length: 52 }, (_, i) => i), px);
+    }).catch((err: unknown) => {
+      console.error('[table] card textures failed twice', err);
+      this.texturesBuildingFor = 0;
+      return null;
+    }).then((tex) => {
+      if (!tex) return;
       if (this.texturesBuildingFor !== px) { destroyCardTextures(tex); return; }
       const old = this.textures;
       this.textures = tex;
@@ -642,6 +658,7 @@ export class Table {
       return;
     }
     if (sp.id < 0) return;
+    if (this.celebration?.sprites.some((c) => c.sp === sp)) return; // tumbling cards are not playable
     const pickable = sp.pickable && this.host.canPickUp(sp.pile, sp.index);
     const run = pickable ? this.runFrom(sp) : [sp];
     this.drag = {
@@ -658,6 +675,7 @@ export class Table {
       samples: [{ t: stamp(e), x, y }],
       pointerId: e.pointerId
     };
+    this.dragLastEventAt = performance.now();
     if (pickable) {
       run.forEach((s, i) => {
         s.lift.target = 1;
@@ -684,9 +702,10 @@ export class Table {
     if (!d || e.pointerId !== d.pointerId) return;
     const { x, y } = e.global;
     if (!d.moved && Math.hypot(x - d.startX, y - d.startY) > this.feel.dragThresholdPx) { d.moved = true; this.disarm(); }
-    if (!d.moved || d.targets.length === 0 && !d.sprites[0]?.pickable) return;
-    if (d.targets.length === 0) return; // not pickable: no drag
+    if (!d.moved) return;
+    if (!d.sprites[0]?.pickable) return; // face-down or otherwise immovable: no drag at all
     const now = stamp(e);
+    this.dragLastEventAt = performance.now();
     d.samples.push({ t: now, x, y });
     while (d.samples.length > 8 || (d.samples.length > 2 && now - d.samples[0]!.t > 90)) d.samples.shift();
     this.host.activity();
@@ -708,11 +727,13 @@ export class Table {
   private updateMagnet(x: number, y: number, targets: string[]): void {
     const best = this.nearestTarget(x, y, targets, this.feel.magnetRadiusPx);
     if (best !== this.magnetPile) {
+      const L = this.layout;
+      const base = (s: Sprite) => { if (L && this.textures) { s.width = L.cardW; s.height = L.cardH; } return s; };
       const prev = this.slots.get(this.magnetPile);
-      if (prev) prev.scale.set(prev.scale.x / this.feel.targetMagnetScale);
+      if (prev) base(prev);
       this.magnetPile = best ?? '';
       const next = this.slots.get(this.magnetPile);
-      if (next) next.scale.set(next.scale.x * this.feel.targetMagnetScale);
+      if (next) { base(next); next.scale.set(next.scale.x * this.feel.targetMagnetScale, next.scale.y * this.feel.targetMagnetScale); }
     }
   }
 
@@ -727,6 +748,18 @@ export class Table {
     }
     return best;
   }
+
+  /** Drop a drag without a move (cancelled pointer, or the watchdog): sprites return home. */
+  private abortDrag(pointerId?: number): void {
+    const d = this.drag;
+    if (!d || (pointerId !== undefined && d.pointerId !== pointerId)) return;
+    this.drag = null;
+    this.updateMagnet(-1e9, -1e9, []);
+    this.setTargetGlow(d.targets, 0);
+    this.lastGesture = { kind: 'return', speed: 0, held: 0, moved: d.moved };
+    if (d.targets.length) this.returnHome(d.sprites, false); else this.settle(d.sprites);
+  }
+  private dragLastEventAt = 0;
 
   private onUp = (e: FederatedPointerEvent): void => {
     const d = this.drag;
@@ -746,9 +779,6 @@ export class Table {
       // Tap (or double-tap — both do the same thing).
       this.settle(d.sprites);
       this.setTargetGlow(d.targets, 0);
-      const key = `${d.pile}:${d.index}`;
-      this.lastTapAt = performance.now();
-      this.lastTapKey = key;
       // Second tap of an armed pair: complete the move onto the tapped pile.
       if (this.armed && this.armed.targets.includes(d.pile) && !(this.armed.pile === d.pile)) {
         const a = this.armed;
@@ -770,8 +800,9 @@ export class Table {
       return;
     }
     if (d.targets.length === 0) {
+      // Pickable but nowhere to go: it followed the finger, and now it goes home with a shake.
       this.lastGesture.kind = 'return';
-      this.settle(d.sprites);
+      if (d.sprites[0]?.pickable) this.returnHome(d.sprites, true); else this.settle(d.sprites);
       return;
     }
     this.setTargetGlow(d.targets, 0);
@@ -809,7 +840,10 @@ export class Table {
   }
 
   private place(d: { pile: string; index: number; sprites: CardSprite[] }, to: string, velocity: number): void {
-    const changed = this.host.tryMove(d.pile, d.index, to);
+    // The board may have changed under a long throw: only move if the source still holds these cards.
+    const src = this.view?.piles.find((p) => p.id === d.pile);
+    const still = src && d.sprites.every((sp, i) => src.cards[d.index + i]?.id === sp.id);
+    const changed = still ? this.host.tryMove(d.pile, d.index, to) : false;
     if (changed) {
       d.sprites.forEach((s) => {
         s.pos.configure(this.r(this.feel.placeResponse), this.feel.placeDamping);
@@ -882,6 +916,8 @@ export class Table {
       }
     }
     this.stepCelebration(dt);
+    // Watchdog: a drag with no pointer events for 3 s has lost its pointer.
+    if (this.drag && this.drag.moved && performance.now() - this.dragLastEventAt > 3000) this.abortDrag();
     // Lamp breathes (very slowly).
     this.lampPhase += dt;
     const breathe = 1 - (Math.sin((this.lampPhase / 9) * Math.PI * 2) + 1) * 0.008;

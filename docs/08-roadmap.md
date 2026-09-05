@@ -52,7 +52,7 @@ non-obvious. Status is kept here and in `CLAUDE.md`.
 
 ## M8 — Platform polish
 - Real-iPad pass (drag feel, safe areas, standalone); Lighthouse PWA; reduced-motion; a11y layer.
-- Golf, Pyramid; Idle Riffle toy; more shuffle styles.
+- ~~Golf, Pyramid~~ ✅ (2026-09-05); Idle Riffle toy; more shuffle styles.
 
 ## Later
 Ascension (Joker → Stars ★), FreeCell, Spider, real auth, leaderboards-that-matter, DynamoDB.

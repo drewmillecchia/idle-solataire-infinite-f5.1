@@ -56,6 +56,7 @@ export interface View {
   offline: { seconds: number; earned: string } | null;
   wonBanner: { burst: string } | null;
   lastGesture: string;
+  storageWarning: boolean;
   cut: {
     revealed: boolean;
     canCut: boolean;
@@ -144,10 +145,12 @@ export class GameHost implements TableHost {
       this.reattachMarks();
       this.derived = derive(this.state);
       const gone = (Date.now() - this.state.lastSeenAt) / 1000;
-      if (gone > 60) {
+      if (gone > 0) {
         const r = applyOffline(this.state, gone, this.bus);
-        if (r.earned.gt(0)) this.offlineNotice = { seconds: r.seconds, earned: formatNumber(r.earned) };
+        // Earnings always accrue; the welcome-back note only for a real absence.
+        if (gone > 60 && r.earned.gt(0)) this.offlineNotice = { seconds: r.seconds, earned: formatNumber(r.earned) };
       }
+      this.rebuildLedger();
     }
     this.state.lastSeenAt = Date.now();
     void requestPersistence();
@@ -158,6 +161,17 @@ export class GameHost implements TableHost {
     document.addEventListener('visibilitychange', this.onVisibility);
     window.addEventListener('pagehide', () => void this.save());
     this.pushView();
+  }
+
+  /** The ledger is derived from persisted state (milestones passed, cuts made), never stored itself. */
+  private rebuildLedger(): void {
+    const entries: Ledger[] = [];
+    for (const id of this.state.milestones) {
+      const m = MILESTONES.find((x) => x.id === id);
+      if (m) entries.push({ id: m.id, text: m.ledger, at: 0 });
+    }
+    for (let i = 1; i <= this.state.prestige.cutsPerformed; i++) entries.push({ id: `cut-${i}`, text: `Cut ${i}. The deck forgets; the Keeper does not.`, at: 0 });
+    this.ledger = entries.reverse();
   }
 
   attachTable(table: Table): void {
@@ -177,9 +191,9 @@ export class GameHost implements TableHost {
       void this.save();
     } else {
       const gone = (Date.now() - this.state.lastSeenAt) / 1000;
-      if (gone > 30) {
+      if (gone > 0) {
         const r = applyOffline(this.state, gone, this.bus);
-        if (r.earned.gt(0)) this.offlineNotice = { seconds: r.seconds, earned: formatNumber(r.earned) };
+        if (gone > 30 && r.earned.gt(0)) this.offlineNotice = { seconds: r.seconds, earned: formatNumber(r.earned) };
       }
       this.state.lastSeenAt = Date.now();
       this.lastFrame = performance.now();
@@ -214,12 +228,14 @@ export class GameHost implements TableHost {
 
   async save(): Promise<void> {
     try {
-      this.derived = derive(this.state);
-      await persistSave({ json: serialize(this.state), progress: this.state.lifetimeShuffles.toString(), savedAt: Date.now() });
+      const r = await persistSave({ json: serialize(this.state), progress: this.state.lifetimeShuffles.toString(), savedAt: Date.now() });
+      this.storageWarning = !r.idb && !r.ls;
     } catch (e) {
       console.warn('save failed', e);
+      this.storageWarning = true;
     }
   }
+  private storageWarning = false;
 
   async hardReset(): Promise<void> {
     await clearSaves();
@@ -228,15 +244,21 @@ export class GameHost implements TableHost {
 
   exportSave(): string { return exportString(this.state); }
   importSave(s: string): boolean {
-    try {
-      const st = importString(s);
-      this.state = st;
-      this.reattachMarks();
-      this.derived = derive(st);
-      this.newHand(true);
-      void this.save();
-      return true;
-    } catch { return false; }
+    if (this.cutting) return false;
+    // importString never throws — a bad string yields a blank state — so check the payload first, and
+    // never write over the existing save unless it is a real save.
+    let raw: unknown;
+    try { raw = JSON.parse(atob(s.trim())); } catch { return false; }
+    if (!raw || typeof raw !== 'object' || !('lifetimeShuffles' in raw) || !('cards' in raw)) return false;
+    const st = importString(s.trim());
+    if (!Array.isArray(st.cards) || st.cards.length < 52) return false;
+    this.state = st;
+    this.reattachMarks();
+    this.derived = derive(st);
+    this.rebuildLedger();
+    this.newHand(true);
+    void this.save();
+    return true;
   }
 
   // ---------------------------------------------------------------- game
@@ -244,6 +266,9 @@ export class GameHost implements TableHost {
   private config(): GameConfig { return this.state.gameConfig[this.module.id] ?? {}; }
 
   newHand(silent = false): void {
+    if (this.cutting) return;
+    this.dealerPending = null;
+    this.table?.clearHint();
     this.seed = randomSeed();
     this.board = this.module.deal(mulberry32(this.seed), this.config(), this.twists());
     this.history = [];
@@ -258,6 +283,7 @@ export class GameHost implements TableHost {
   }
 
   switchGame(id: string): void {
+    if (this.cutting) return;
     const m = gameById(id);
     if (!m) return;
     this.module = m as GameModule<unknown>;
@@ -276,6 +302,7 @@ export class GameHost implements TableHost {
   setBoardForTesting(board: unknown): void {
     this.board = board;
     this.history = [];
+    this.state.run.hand.homedThisHand = []; // a constructed board is a fresh hand for payout purposes
     this.table?.setBoard(this.module.view(this.board), { instant: true });
     this.pushView();
   }
@@ -297,7 +324,9 @@ export class GameHost implements TableHost {
     this.board = result.board;
     this.handMoves++;
     for (const id of result.homed) homeCard(this.state, this.bus, id, from);
-    if (result.homed.length === 0 && from !== 'stock') tableauSpark(this.state, this.bus);
+    // Moves off a foundation pay nothing (otherwise a two-tap round trip farms sparks forever).
+    const fromKind = this.module.view(this.board).piles.find((p) => p.id === from)?.kind;
+    if (result.homed.length === 0 && from !== 'stock' && fromKind !== 'foundation') tableauSpark(this.state, this.bus);
     this.table?.setBoard(this.module.view(this.board));
     if (result.won) {
       const secs = (performance.now() - this.handStartedAt) / 1000;
@@ -320,7 +349,14 @@ export class GameHost implements TableHost {
     return changed;
   }
   tap(pile: string, index: number): boolean {
-    if (pile === 'stock') { const ok = this.apply(this.module.draw(this.board, this.twists()), 'stock'); if (ok) sound('flip', 0.5); return ok; }
+    const pv = this.module.view(this.board).piles.find((p) => p.id === pile);
+    // Only the top of the waste (or a stock whose top is playable, as in Pyramid) can move: aim the tap there.
+    if (pv && (pile === 'waste' || pile === 'stock') && pv.pickableFrom !== undefined) index = pv.cards.length - 1;
+    if (pile === 'stock') {
+      const to = pv?.pickableFrom !== undefined ? this.module.autoTarget(this.board, pile, index, this.twists()) : null;
+      if (to && this.tryMove(pile, index, to)) { sound('place', 0.5); haptic('soft'); return true; }
+      const ok = this.apply(this.module.draw(this.board, this.twists()), 'stock'); if (ok) sound('flip', 0.5); return ok;
+    }
     const to = this.module.autoTarget(this.board, pile, index, this.twists());
     if (to && this.tryMove(pile, index, to)) { sound('place', 0.5); haptic('soft'); return true; }
     sound('tick', 0.15);
@@ -429,6 +465,8 @@ export class GameHost implements TableHost {
     if (this.cutting || !canCut(this.state, this.derived)) return;
     this.cutting = true;
     this.wonBanner = null;
+    this.dealerPending = null;
+    this.table?.clearHint();
     this.pushView();
     const finish = () => {
       const earned = performCut(this.state, this.bus, way, Date.now());
@@ -455,8 +493,9 @@ export class GameHost implements TableHost {
   }
   setSetting<K extends keyof GameState['settings']>(k: K, v: GameState['settings'][K]): void {
     this.state.settings[k] = v;
-    if (this.table) this.table.reducedMotion = this.state.settings.reducedMotion;
+    if (this.table) this.table.reducedMotion = this.state.settings.reducedMotion || matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.pushView();
+    void this.save();
   }
   setFeel<K extends keyof Feel>(k: K, v: Feel[K]): void {
     (this.feel as Feel)[k] = v;
@@ -509,7 +548,7 @@ export class GameHost implements TableHost {
     return {
       revision: 0, shuffles: '0', lifetime: '0', rate: '0/s', awake: 0, cutsPerformed: 0, handsWon: 0, handsPlayed: 0,
       moves: 0, won: false, stuck: false, canUndo: false, dealerActive: false, dealerUnlocked: false, dealerCountdown: 0,
-      nextMilestoneLabel: '', nextMilestoneProgress: 0, journey: 0, ledger: [], toasts: [], upgrades: [], offline: null, wonBanner: null, lastGesture: '',
+      nextMilestoneLabel: '', nextMilestoneProgress: 0, journey: 0, ledger: [], toasts: [], upgrades: [], offline: null, wonBanner: null, lastGesture: '', storageWarning: false,
       cut: { revealed: false, canCut: false, cutsOnCut: '0', progress: 0, potential: '0', runEarned: '0', threshold: '0', cuts: '0', lifetimeCuts: '0', cutsPerformed: 0, way: 'none', ways: [], cutting: false },
       constellation: [],
       deck: [],
@@ -563,6 +602,7 @@ export class GameHost implements TableHost {
       }),
       offline: this.offlineNotice,
       wonBanner: this.wonBanner,
+      storageWarning: this.storageWarning,
       cut: {
         revealed: s.revealed.includes('cut') || s.prestige.cutsPerformed > 0,
         canCut: canCut(s, d) && !this.cutting,
@@ -583,7 +623,7 @@ export class GameHost implements TableHost {
         slots: markSlots(s, d),
         used: usedSlots(s),
         available: availableMarks(s, this.bus).map((m) => ({ id: m.id, name: m.name, glyph: m.glyph, rule: m.rule, arity: m.arity, kind: m.kind, placed: s.marks.placed.filter((p) => p.mark === m.id).length })),
-        placed: s.marks.placed.map((p) => { const m = markDef(p.mark); return { id: p.mark, name: m?.name ?? p.mark, glyph: m?.glyph ?? '?', cards: p.cards }; }),
+        placed: s.marks.placed.map((p) => { const m = markDef(p.mark); return { id: p.mark, name: m?.name ?? p.mark, glyph: m?.glyph ?? '?', cards: [...p.cards] }; }),
         picking: this.pickingMark,
         canPlace: this.pickingMark !== null && canPlace(s, d, this.pickingMark, this.selectedCards)
       },
@@ -595,7 +635,7 @@ export class GameHost implements TableHost {
       gameId: this.module.id,
       gameName: this.module.name,
       games: GAMES.map((g) => ({ id: g.id, name: g.name, blurb: g.blurb })),
-      gameOptions: this.module.options.map((option) => ({ option, value: this.config()[option.id] ?? option.default })),
+      gameOptions: this.module.options.map((option) => ({ option: { ...option, values: option.values.map((v) => ({ ...v })) }, value: this.config()[option.id] ?? option.default })),
       settings: { ...s.settings }
     };
     this.view = v;

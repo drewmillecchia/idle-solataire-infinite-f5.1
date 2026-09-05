@@ -4,3 +4,5 @@ export * from './registry';
 export * from './autoplay';
 export * from './games/klondike';
 export * from './games/tripeaks';
+export * from './games/golf';
+export * from './games/pyramid';

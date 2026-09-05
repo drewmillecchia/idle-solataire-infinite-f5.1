@@ -36,8 +36,8 @@ Rule-twist Marks reach rules through a `Twists` object the module *may* consult:
 | --- | --- | --- | --- |
 | 1 | **Klondike** (draw 1 / draw 3, redeal limit option) | The solitaire. ~82 % winnable; the familiar hand. | ✅ Shipped (M2). Greedy autoplay wins 22/60. Solver for Scholar deals later. |
 | 2 | **TriPeaks** | Fast, forgiving (~90 % winnable), chains → sparks feel great. Proves the contract with a totally different layout. | ✅ Shipped (2026-09-05) with **zero** renderer changes. Greedy wins 11/40. Every pyramid position is its own one-card pile. |
-| 3 | **Golf** | Very short hands (~1–2 min). Low win rate makes wins special. | Matching sequence game. |
-| 4 | **Pyramid** | A *matching* game (pairs to 13). Different mental mode. | Two-card selection interaction. |
+| 3 | **Golf** | Very short hands (~1–2 min). Low win rate makes wins special. | ✅ Shipped (2026-09-05). Option `wrap` (A↔K) default off. Greedy wins ~0.5 % (classic) / 8 % (wrap) — humans do far better; wins are meant to be rare. |
+| 4 | **Pyramid** | A *matching* game (pairs to 13). Different mental mode. | ✅ Shipped (2026-09-05). Stock top and waste top are playable; option `redeals` default 2. Greedy wins ~22 % with 2 redeals (the "<5 %" folklore assumes no redeals and no stock-top play) — set `redeals: 0` if it should be brutal. Pairs ride `move(pileA, 0, pileB)`; the table's armed tap-to-select makes tap–tap pairing work. |
 | 5 | **FreeCell** | Nearly always winnable; the puzzle-lover's game. Way of the Scholar's home. | All face-up; drag-heavy. |
 | 6 | **Spider** (1/2/4 suits) | Long, meditative, 104 cards. Only after Ascension logic handles >52. | Two decks = two of every generator; design later. |
 
@@ -51,8 +51,12 @@ card landing on a foundation (or being *removed* in TriPeaks/Golf/Pyramid) count
   renderer's topmost sprite, so it resolves correctly; any code that hit-tests via `layout.piles`
   directly must iterate in reverse ("topmost wins").
 - `PileView.slot` (default true except `kind: 'peak'`) controls whether an empty position draws an outline.
-- Barrel naming: a game's move enumerator is `legal<Game>Moves` (`legalMoves` is Klondike's legacy name)
-  because `rules/index.ts` re-exports every game.
+- Barrel naming: `rules/index.ts` re-exports every game, so every exported helper must be game-prefixed
+  (`legal<Game>Moves`, `golfPlayableOnWaste`, `PYRAMID_SLOT_COUNT`…); a bare name collides as TS2308.
+- `rows` must satisfy `y_deepest × 1.098 + 1 ≤ rows` because the layout spaces piles by `cardH + gapY`
+  but sizes the felt by `rows × cardH`. Golf 3.75, Pyramid 4.3 — asserted in their tests.
+- A playable stock top (Pyramid) sets `pickableFrom` on the stock; the host tries `autoTarget` before
+  drawing when it sees that.
 
 ## Deal generation
 - `rng` is a seeded PRNG (mulberry32) so a hand can be replayed and a bug report can carry a seed.

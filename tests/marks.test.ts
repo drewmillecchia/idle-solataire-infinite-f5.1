@@ -375,6 +375,7 @@ describe('Twin', () => {
     expect(state.cards[HK]?.charge).toBe(0);
 
     events.length = 0;
+    state.run.hand.homedThisHand = []; // a new hand: a card pays once per hand
     homeCard(state, bus, SA, 'foundation-s'); // charge-gained at depth 0
     expect(state.cards[HK]?.charge).toBe(1);
     expect(state.cards[SA]?.charge).toBe(3); // +1 home, +1 the ring-back
@@ -476,23 +477,23 @@ describe('Anchor', () => {
     expect(state.cards[0]?.charge).toBe(0);
     // The placement itself survives the Cut, and so does the per-hand scratch's reset.
     expect(state.marks.placed).toEqual([{ mark: 'anchor', cards: [HK] }]);
-    expect(state.run.hand).toEqual({ echoRanks: [], homedThisHand: [] });
+    expect(state.run.hand).toEqual({ echoRanks: [], homedThisHand: [], roll: 1 });
   });
 });
 
 // ---- save --------------------------------------------------------------------------------
 
-describe('save v3', () => {
+describe('save v4', () => {
   it('round-trips placements and rebuilds the card cache', () => {
     const state = markState();
     const { bus } = withBus();
     place(state, bus, 'twin', [SA, HK]);
     place(state, bus, 'lantern', [D3]);
-    state.run.hand = { echoRanks: [5, 9], homedThisHand: [SA] };
+    state.run.hand = { echoRanks: [5, 9], homedThisHand: [SA], roll: 1 };
 
     const restored = deserialize(serialize(state));
     expect(restored.version).toBe(SAVE_VERSION);
-    expect(SAVE_VERSION).toBe(3);
+    expect(SAVE_VERSION).toBe(4);
     expect(restored.marks.placed).toEqual([
       { mark: 'twin', cards: [SA, HK] },
       { mark: 'lantern', cards: [D3] }
@@ -500,7 +501,7 @@ describe('save v3', () => {
     expect(restored.cards[SA]?.marks).toEqual(['twin']);
     expect(restored.cards[HK]?.marks).toEqual(['twin']);
     expect(restored.cards[D3]?.marks).toEqual(['lantern']);
-    expect(restored.run.hand).toEqual({ echoRanks: [5, 9], homedThisHand: [SA] });
+    expect(restored.run.hand).toEqual({ echoRanks: [5, 9], homedThisHand: [SA], roll: 1 });
   });
 
   it('migrates v2 -> v3 with empty marks and an empty hand', () => {
@@ -521,7 +522,7 @@ describe('save v3', () => {
     const restored = deserialize(v2json);
     expect(restored.version).toBe(SAVE_VERSION);
     expect(restored.marks.placed).toEqual([]);
-    expect(restored.run.hand).toEqual({ echoRanks: [], homedThisHand: [] });
+    expect(restored.run.hand).toEqual({ echoRanks: [], homedThisHand: [], roll: 1 });
   });
 
   it('repairs garbage marks without throwing or losing the rest of the save', () => {
@@ -550,7 +551,7 @@ describe('save v3', () => {
     expect(state.marks.placed).toEqual([{ mark: 'kindling', cards: [7] }]);
     expect(state.cards[7]?.marks).toEqual(['kindling']);
     expect(state.cards[1]?.marks).toEqual([]);
-    expect(state.run.hand).toEqual({ echoRanks: [5], homedThisHand: [3] });
+    expect(state.run.hand).toEqual({ echoRanks: [5], homedThisHand: [3], roll: 1 });
   });
 
   it('survives marks that are not even an object', () => {

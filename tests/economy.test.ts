@@ -49,6 +49,7 @@ describe('homeCard', () => {
     expect(rateAfterWake.gt(0)).toBe(true);
 
     events.length = 0;
+    state.run.hand.homedThisHand = []; // next hand: a card pays once per hand
     homeCard(state, bus, card, 'foundation-s');
     expect(events.map((e) => e.type)).toEqual(['charge-gained', 'card-home', 'spark']);
     expect(events[0]).toMatchObject({ type: 'charge-gained', card, charge: 1 });
@@ -68,6 +69,7 @@ describe('homeCard', () => {
     const { bus } = withBus();
     const card = cardId('H', 1);
     homeCard(state, bus, card, 'foundation-h'); // wake, 0 spark
+    state.run.hand.homedThisHand = []; // next hand
     homeCard(state, bus, card, 'foundation-h'); // charge, >=1 spark
     expect(state.shuffles.gt(0)).toBe(true);
     expect(state.lifetimeShuffles.eq(state.shuffles)).toBe(true);
@@ -80,6 +82,7 @@ describe('tableauSpark', () => {
     const { bus, events } = withBus();
     const card = cardId('C', 3);
     homeCard(state, bus, card, 'tableau');
+    state.run.hand.homedThisHand = []; // next hand
     homeCard(state, bus, card, 'tableau');
     events.length = 0;
 
