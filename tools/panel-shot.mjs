@@ -8,7 +8,7 @@ const page = await browser.newPage({ viewport: { width: 1180, height: 820 } });
 page.on('pageerror', (e) => console.error('pageerror', e.message));
 await page.goto('http://127.0.0.1:3000/', { waitUntil: 'networkidle' });
 await page.waitForFunction(() => window.__game && window.__game.table);
-await page.evaluate(() => { const g = window.__game; window.__table.skipChoreography(); for (let i = 0; i < 52; i += 3) { g.state.cards[i].awake = true; g.state.cards[i].charge = (i % 7); } g.pushView(); });
+await page.evaluate(() => { const g = window.__game; window.__table.skipChoreography(); for (let i = 0; i < 52; i += 3) { g.state.cards[i].awake = true; g.state.cards[i].charge = (i % 7); } g.markSlow(); g.pushView(); });
 await page.locator('.tabs button', { hasText: tab }).click();
 await page.waitForTimeout(300);
 await page.screenshot({ path: out });

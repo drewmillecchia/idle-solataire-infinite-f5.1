@@ -252,6 +252,12 @@ export class GameHost implements TableHost {
     }
   }
   private storageWarning = false;
+  /** Lists (upgrades, constellation, deck, marks, numbering, ways) rebuild only when flagged or every 500 ms. */
+  private slowDirty = true;
+  private slowBuiltAt = 0;
+  /** Tests and tools that mutate engine state directly call this so the list half of the view refreshes. */
+  markSlow(): void { this.slowDirty = true; }
+  private slow: Pick<View, 'upgrades' | 'constellation' | 'deck' | 'marks' | 'numbering' | 'games' | 'gameOptions' | 'ledger'> | null = null;
 
   async hardReset(): Promise<void> {
     await clearSaves();
@@ -299,6 +305,7 @@ export class GameHost implements TableHost {
   }
 
   switchGame(id: string): void {
+    this.slowDirty = true;
     if (this.cutting) return;
     const m = gameById(id);
     if (!m) return;
@@ -309,6 +316,7 @@ export class GameHost implements TableHost {
   }
 
   setGameOption(optionId: string, value: string): void {
+    this.slowDirty = true;
     const cfg = { ...(this.state.gameConfig[this.module.id] ?? {}) };
     cfg[optionId] = value;
     this.state.gameConfig[this.module.id] = cfg;
@@ -395,6 +403,7 @@ export class GameHost implements TableHost {
   selectedCards: CardId[] = [];
   /** Tap on a card in the deck spread. Selection drives Mark placement (M4). */
   tapDeckCard(id: CardId): void {
+    this.slowDirty = true;
     const arity = this.pickingMark ? (markDef(this.pickingMark)?.arity ?? 1) : 2;
     this.selectedCards = this.selectedCards.includes(id) ? this.selectedCards.filter((x) => x !== id) : [...this.selectedCards, id].slice(-arity);
     this.pushView();
@@ -411,11 +420,13 @@ export class GameHost implements TableHost {
   // Marks ----------------------------------------------------------------------
   pickingMark: string | null = null;
   pickMark(id: string | null): void {
+    this.slowDirty = true;
     this.pickingMark = this.pickingMark === id ? null : id;
     this.selectedCards = [];
     this.pushView();
   }
   placePickedMark(): void {
+    this.slowDirty = true;
     if (!this.pickingMark) return;
     if (placeMark(this.state, this.bus, this.derived, this.pickingMark, this.selectedCards)) {
       this.derived = derive(this.state);
@@ -427,6 +438,7 @@ export class GameHost implements TableHost {
     }
   }
   unplaceMark(id: string, card: number): void {
+    this.slowDirty = true;
     if (removeMark(this.state, id, card)) {
       this.derived = derive(this.state);
       sound('slideBack', 0.3);
@@ -514,17 +526,21 @@ export class GameHost implements TableHost {
     else finish();
   }
   unlockNumbering(id: string): void {
+    this.slowDirty = true;
     if (unlockNumbering(this.state, this.bus, id as NumberingId)) { this.derived = derive(this.state); sound('chime', 0.6); haptic('soft'); this.pushView(); void this.save(); }
   }
   selectNumbering(id: string): void {
+    this.slowDirty = true;
     if (selectNumbering(this.state, id as NumberingId)) { this.derived = derive(this.state); sound('tick', 0.5); this.pushView(); void this.save(); }
   }
   buyNode(id: string): void {
+    this.slowDirty = true;
     if (buyNode(this.state, this.bus, id)) { this.derived = derive(this.state); sound('chime', 0.5); haptic('soft'); this.pushView(); }
   }
 
   // Economy UI -------------------------------------------------------------
   buy(id: string, count = 1): void {
+    this.slowDirty = true;
     if (buyUpgrade(this.state, this.bus, id, count)) { this.derived = derive(this.state); sound('tick', 0.5); haptic('tick'); this.pushView(); }
   }
   buyMax(id: string): void {
@@ -551,6 +567,7 @@ export class GameHost implements TableHost {
 
   // Events → presenters ------------------------------------------------------
   private onEvent(e: GameEvent): void {
+    this.slowDirty = true;
     switch (e.type) {
       case 'card-woken':
         this.sound('chime', 0.6);
@@ -601,6 +618,34 @@ export class GameHost implements TableHost {
     };
   }
 
+  /** The list half of the view: only rebuilt when an event flags it (or every 500 ms for affordability). */
+  private buildSlow(s: GameState, d: Derived): NonNullable<GameHost['slow']> {
+    return {
+      ledger: this.ledger.slice(0, 12),
+      upgrades: visibleUpgrades(s).map((u) => {
+        const owned = s.run.upgrades[u.id] ?? 0;
+        const cost = upgradeCost(s, u.id, 1);
+        return { id: u.id, name: u.name, blurb: u.blurb, owned, max: u.max, cost: formatNumber(cost), affordable: s.shuffles.gte(cost) && (u.max === null || owned < u.max), effect: describeEffect(u.effect) };
+      }),
+      deck: s.cards.map((c, i) => ({ awake: c.awake, charge: c.charge, glyph: this.glyphFor(c.marks), selected: this.selectedCards.includes(i) })),
+      marks: {
+        slots: markSlots(s, d),
+        used: usedSlots(s),
+        available: availableMarks(s).map((m) => ({ id: m.id, name: m.name, glyph: m.glyph, rule: m.rule, arity: m.arity, kind: m.kind, placed: s.marks.placed.filter((p) => p.mark === m.id).length })),
+        placed: s.marks.placed.map((p) => { const m = markDef(p.mark); return { id: p.mark, name: m?.name ?? p.mark, glyph: m?.glyph ?? '?', cards: [...p.cards] }; }),
+        picking: this.pickingMark,
+        canPlace: this.pickingMark !== null && canPlace(s, d, this.pickingMark, this.selectedCards)
+      },
+      numbering: numberingOptions(s).map((o) => ({ id: o.id, name: o.name, blurb: o.blurb, cost: formatNumber(o.cost), unlocked: o.unlocked, selected: o.selected, affordable: o.affordable, values: [...o.values] })),
+      constellation: visibleNodes(s).map((n) => ({
+        id: n.id, name: n.name, blurb: n.blurb, branch: n.branch, level: nodeLevel(s, n.id), max: n.max,
+        cost: formatNumber(nodeCost(s, n.id)), affordable: canBuyNode(s, n.id), effect: describeNode(n.effect)
+      })),
+      games: GAMES.map((g) => ({ id: g.id, name: g.name, blurb: g.blurb })),
+      gameOptions: this.module.options.map((option) => ({ option: { ...option, values: option.values.map((v) => ({ ...v })) }, value: this.config()[option.id] ?? option.default })),
+    };
+  }
+
   pushView(): void {
     const s = this.state;
     this.derived = derive(s);
@@ -618,6 +663,13 @@ export class GameHost implements TableHost {
       label = nm.label;
     }
     const idle = (performance.now() - this.lastActivity) / 1000;
+    const now = performance.now();
+    if (!this.slow || this.slowDirty || now - this.slowBuiltAt > 500) {
+      this.slow = this.buildSlow(s, d);
+      this.slowDirty = false;
+      this.slowBuiltAt = now;
+    }
+    const slow = this.slow;
     const v: View = {
       revision: this.view.revision + 1,
       shuffles: formatNumber(s.shuffles),
@@ -637,13 +689,7 @@ export class GameHost implements TableHost {
       nextMilestoneLabel: label,
       nextMilestoneProgress: prog,
       journey: journeyFraction(s),
-      ledger: this.ledger.slice(0, 12),
       toasts: this.toasts.slice(),
-      upgrades: visibleUpgrades(s).map((u) => {
-        const owned = s.run.upgrades[u.id] ?? 0;
-        const cost = upgradeCost(s, u.id, 1);
-        return { id: u.id, name: u.name, blurb: u.blurb, owned, max: u.max, cost: formatNumber(cost), affordable: s.shuffles.gte(cost) && (u.max === null || owned < u.max), effect: describeEffect(u.effect) };
-      }),
       offline: this.offlineNotice,
       wonBanner: this.wonBanner,
       storageWarning: this.storageWarning,
@@ -662,15 +708,6 @@ export class GameHost implements TableHost {
         ways: WAYS.map((w) => ({ ...w, unlocked: s.prestige.waysUnlocked.includes(w.id) })),
         cutting: this.cutting
       },
-      deck: s.cards.map((c, i) => ({ awake: c.awake, charge: c.charge, glyph: this.glyphFor(c.marks), selected: this.selectedCards.includes(i) })),
-      marks: {
-        slots: markSlots(s, d),
-        used: usedSlots(s),
-        available: availableMarks(s).map((m) => ({ id: m.id, name: m.name, glyph: m.glyph, rule: m.rule, arity: m.arity, kind: m.kind, placed: s.marks.placed.filter((p) => p.mark === m.id).length })),
-        placed: s.marks.placed.map((p) => { const m = markDef(p.mark); return { id: p.mark, name: m?.name ?? p.mark, glyph: m?.glyph ?? '?', cards: [...p.cards] }; }),
-        picking: this.pickingMark,
-        canPlace: this.pickingMark !== null && canPlace(s, d, this.pickingMark, this.selectedCards)
-      },
       reshuffle: {
         revealed: s.revealed.includes('reshuffle') || s.prestige.reshuffles > 0,
         can: canReshuffle(s, d) && !this.cutting,
@@ -682,18 +719,12 @@ export class GameHost implements TableHost {
         lifetimePermutations: formatNumber(s.prestige.lifetimePermutations),
         reshuffles: s.prestige.reshuffles
       },
-      numbering: numberingOptions(s).map((o) => ({ id: o.id, name: o.name, blurb: o.blurb, cost: formatNumber(o.cost), unlocked: o.unlocked, selected: o.selected, affordable: o.affordable, values: [...o.values] })),
       odometer: formatBig(arrangementIndex(s)),
-      constellation: visibleNodes(s).map((n) => ({
-        id: n.id, name: n.name, blurb: n.blurb, branch: n.branch, level: nodeLevel(s, n.id), max: n.max,
-        cost: formatNumber(nodeCost(s, n.id)), affordable: canBuyNode(s, n.id), effect: describeNode(n.effect)
-      })),
       lastGesture: this.table ? `${this.table.lastGesture.kind}${this.table.lastGesture.target ? ' → ' + this.table.lastGesture.target : ''} · ${Math.round(this.table.lastGesture.speed)} px/s · held ${Math.round(this.table.lastGesture.held)} ms` : '',
       gameId: this.module.id,
       gameName: this.module.name,
-      games: GAMES.map((g) => ({ id: g.id, name: g.name, blurb: g.blurb })),
-      gameOptions: this.module.options.map((option) => ({ option: { ...option, values: option.values.map((v) => ({ ...v })) }, value: this.config()[option.id] ?? option.default })),
-      settings: { ...s.settings }
+      settings: { ...s.settings },
+      ...slow
     };
     this.view = v;
   }

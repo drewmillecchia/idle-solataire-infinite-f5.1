@@ -10,7 +10,7 @@ const step = (m) => console.log(`  · ${m}`);
 await page.goto(URL, { waitUntil: 'networkidle' });
 await page.waitForFunction(() => window.__game && window.__game.table);
 await page.evaluate(() => { window.__table.skipChoreography(); });
-await page.evaluate(() => { const g = window.__game; g.state.prestige.cutsPerformed = 12; g.state.prestige.lifetimeCuts = g.state.prestige.lifetimeCuts.plus(40); g.state.prestige.cuts = g.state.prestige.cuts.plus(40); g.pushView(); });
+await page.evaluate(() => { const g = window.__game; g.state.prestige.cutsPerformed = 12; g.state.prestige.lifetimeCuts = g.state.prestige.lifetimeCuts.plus(40); g.state.prestige.cuts = g.state.prestige.cuts.plus(40); g.markSlow(); g.pushView(); });
 await page.waitForTimeout(700);
 const r = await page.evaluate(() => window.__game.view.reshuffle);
 step(`reshuffle: ${JSON.stringify(r)}`);

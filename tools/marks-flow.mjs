@@ -12,7 +12,7 @@ await page.goto(URL, { waitUntil: 'networkidle' });
 await page.waitForFunction(() => window.__game && window.__game.table);
 await page.evaluate(() => { window.__table.skipChoreography(); });
 // Pretend we have cut enough for slots and unlocks.
-await page.evaluate(() => { const g = window.__game; g.state.prestige.lifetimeCuts = g.state.prestige.lifetimeCuts.plus(6); g.state.prestige.constellation['first-mark'] = 2; g.pushView(); });
+await page.evaluate(() => { const g = window.__game; g.state.prestige.lifetimeCuts = g.state.prestige.lifetimeCuts.plus(6); g.state.prestige.constellation['first-mark'] = 2; g.markSlow(); g.pushView(); });
 const m0 = await page.evaluate(() => window.__game.view.marks);
 step(`slots ${m0.used}/${m0.slots}, available: ${m0.available.map((x) => x.id).join(',')}`);
 if (m0.slots < 3) fail(`expected ≥3 slots, got ${m0.slots}`);

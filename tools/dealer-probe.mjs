@@ -12,7 +12,7 @@ await page.evaluate(() => {
   const id = (window.__upgrades ?? []).find?.((u) => u.effect.kind === 'autoDealer')?.id;
   g.state.run.upgrades[id ?? 'the-dealer'] = 1;
   g.state.settings.autoDealerDelaySeconds = 1;
-  g.pushView();
+  g.markSlow(); g.pushView();
   window.__table.skipChoreography();
 });
 const before = await page.evaluate(() => ({ moves: window.__game.handMoves, unlocked: window.__game.derived.autoDealerUnlocked }));
