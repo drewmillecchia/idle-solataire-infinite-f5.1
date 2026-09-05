@@ -17,6 +17,7 @@ import { mulberry32 } from '$engine/rng';
 import { NO_TWISTS } from '$rules/module';
 import { gameById } from '$rules/registry';
 import { nextMove } from '$rules/autoplay';
+import { UPGRADES } from '$content/index';
 
 const SEEDS = [1, 2, 3, 4, 5];
 /** Long enough to contain the first cut on every seed, short enough to run five of them. */
@@ -31,6 +32,11 @@ let short: SimResult[] = [];
 let long: SimResult;
 let relaxer: SimResult;
 let cycles: SimResult;
+let upgradeRuns: { purchaseTimes: number[]; ids: string[] }[] = [];
+
+/** Seeds probed for the run-upgrade-tier depth check; a subset of SEEDS keeps this file's budget. */
+const UPGRADE_PROBE_SEEDS = [1, 2, 3];
+const UPGRADE_PROBE_MINUTES = 75;
 
 beforeAll(() => {
   short = SEEDS.map((s) => runSim(SHORT_HOURS, 'engaged', s));
@@ -39,6 +45,7 @@ beforeAll(() => {
   // 0.5 s steps: `step` never clamps its delta (invariant #3), so a coarser sim is the same
   // arithmetic, and it keeps this file inside its wall-clock budget.
   cycles = runSim(RESHUFFLE_HOURS, 'engaged', 1, { dt: 0.5 });
+  upgradeRuns = UPGRADE_PROBE_SEEDS.map((s) => simulateSingleRunPurchases(UPGRADE_PROBE_MINUTES, s));
 }, 180_000);
 
 function median(xs: number[]): number {
@@ -323,5 +330,65 @@ describe('Reshuffle, layer 2 (docs/02 §6)', () => {
     // Measured: lifetimeShuffles ~ 1e16.5, deckRate ~ 1e11.5.
     expect(cycles.lifetimeLog10).toBeLessThan(40);
     expect(cycles.lifetimeLog10).toBeGreaterThan(6);
+  });
+});
+
+/**
+ * The run-upgrade tier (docs/02 §9's "Run-upgrade tier exhausted", and the reason tier 2 exists —
+ * see `content/upgrades.json`'s eight new entries): does the shop still have finite, capped
+ * decisions worth making well past the old single-tier pace?
+ *
+ * "Exhausted" is operationalised as: every CAPPED upgrade (both tiers — full-table, bright-finish,
+ * long-evening, the-dealer, even-trade, big-turn) has reached its max level, so nothing but the
+ * open-ended ones (which by construction never truly run out) remains to decide. That is measured
+ * against `simulateSingleRunPurchases`, an uninterrupted single run driven by the SAME real engine
+ * and the SAME greedy buy policy `sim/run.ts` uses (deliberately not `sim/run.ts` itself: taking a
+ * Cut resets `run.upgrades` to `{}`, so it cannot see how long one run's shop stays interesting).
+ *
+ * MEASURED on seeds 1-3, 75 simulated minutes: every capped upgrade (both tiers) is maxed by
+ * 49.3 / 51.7 / 51.7 minutes respectively — comfortably past the ~40 min target this asserts, and
+ * well past where the four ORIGINAL capped upgrades alone would have finished (11-30 min for three
+ * of them; only Long Evening, at ~45-52 min, was already slow — tier 2 adds a SECOND, later wave of
+ * finite decisions rather than being first to the line).
+ */
+describe('run-upgrade tier depth (more to buy, docs/02 §9 target: not exhausted before ~40 min)', () => {
+  const CAPPED = UPGRADES.filter((u) => u.max != null);
+
+  function allCappedMaxedAt(run: { purchaseTimes: number[]; ids: string[] }): number | null {
+    let last = 0;
+    for (const u of CAPPED) {
+      let count = 0;
+      let maxedAt: number | null = null;
+      for (let i = 0; i < run.ids.length; i++) {
+        if (run.ids[i] !== u.id) continue;
+        count += 1;
+        if (count === u.max) {
+          maxedAt = run.purchaseTimes[i] ?? null;
+          break;
+        }
+      }
+      if (maxedAt === null) return null; // this capped upgrade never maxed out inside the probe
+      last = Math.max(last, maxedAt);
+    }
+    return last;
+  }
+
+  it('keeps at least one capped upgrade (either tier) below its max through the first 40 minutes', () => {
+    for (const run of upgradeRuns) {
+      const maxedAt = allCappedMaxedAt(run);
+      expect(maxedAt).not.toBeNull();
+      expect(maxedAt as number).toBeGreaterThanOrEqual(40 * 60);
+    }
+  });
+
+  it('still buys something new well past the old single-tier pace (tier 2 upgrades purchased)', () => {
+    const TIER_2 = new Set([
+      'comeback', 'long-streak', 'even-trade', 'crowned', 'underdog-suits', 'favored-suit',
+      'big-turn', 'fresh-cards'
+    ]);
+    for (const run of upgradeRuns) {
+      const tier2Purchases = run.ids.filter((id) => TIER_2.has(id));
+      expect(tier2Purchases.length).toBeGreaterThan(20);
+    }
   });
 });

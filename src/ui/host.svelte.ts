@@ -30,6 +30,10 @@ import { loadSave, persistSave, requestPersistence, clearSaves, cmpProgress } fr
 import { createCloudClient, resolveConflict, type CloudClient } from '../platform/cloud';
 import { sound, haptic, unlockAudio, setMasterVolume, isAudioReady } from '../audio/presenters';
 
+/** Night Watch's courtesy pause: long enough that a gesture is never interrupted, short enough to read
+ * as "does not wait for you to look away". */
+const NIGHT_WATCH_DELAY_SECONDS = 1.5;
+
 export interface Ledger {
   id: string;
   text: string;
@@ -594,11 +598,19 @@ export class GameHost implements TableHost {
   // Auto-Dealer -----------------------------------------------------------
   dealerEnabled = true;
   private dealerPending: ReturnType<typeof nextMove> | null = null;
+  /**
+   * How long the dealer waits after your last input. Night Watch (Constellation) drops it to a
+   * courtesy pause rather than removing it: it must never take a card out from under a live gesture.
+   */
+  private dealerDelay(): number {
+    return this.derived.autoDealerAlwaysOn ? NIGHT_WATCH_DELAY_SECONDS : this.state.settings.autoDealerDelaySeconds;
+  }
+
   private dealerTick(dt: number): void {
     if (!this.derived.autoDealerUnlocked || !this.dealerEnabled || this.cutting) return;
     if (this.module.isWon(this.board)) return;
     const idle = (performance.now() - this.lastActivity) / 1000;
-    if (idle < this.state.settings.autoDealerDelaySeconds) { this.dealerPending = null; return; }
+    if (idle < this.dealerDelay()) { this.dealerPending = null; return; }
     this.dealerTimer += dt;
     const beat = this.dealerBeat();
     if (this.dealerPending) {
@@ -618,7 +630,7 @@ export class GameHost implements TableHost {
     const mv = nextMove(this.module, this.board, this.twists(), this.dealerSeen);
     if (!mv) {
       // Nothing new: deal a fresh hand after a pause.
-      if (idle > this.state.settings.autoDealerDelaySeconds + 4) this.newHand();
+      if (idle > this.dealerDelay() + 4) this.newHand();
       return;
     }
     // Phase 1: telegraph.
@@ -881,8 +893,8 @@ export class GameHost implements TableHost {
       stuck: this.module.isStuck(this.board, this.twists()),
       canUndo: this.history.length > 0,
       dealerUnlocked: d.autoDealerUnlocked,
-      dealerActive: d.autoDealerUnlocked && this.dealerEnabled && idle >= s.settings.autoDealerDelaySeconds,
-      dealerCountdown: d.autoDealerUnlocked && this.dealerEnabled ? Math.max(0, s.settings.autoDealerDelaySeconds - idle) : 0,
+      dealerActive: d.autoDealerUnlocked && this.dealerEnabled && idle >= this.dealerDelay(),
+      dealerCountdown: d.autoDealerUnlocked && this.dealerEnabled ? Math.max(0, this.dealerDelay() - idle) : 0,
       nextMilestoneLabel: label,
       nextMilestoneProgress: prog,
       journey: journeyFraction(s),

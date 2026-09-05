@@ -10,7 +10,7 @@ const page = await browser.newPage({ viewport: { width: 1180, height: 820 } });
 const errors = []; page.on('pageerror', (e) => errors.push(e.message));
 const fail = (m) => { console.error(`FAIL: ${m}`); process.exitCode = 1; };
 await page.goto(process.argv[2] ?? 'http://127.0.0.1:3000/', { waitUntil: 'networkidle' });
-await page.waitForFunction(() => window.__game && window.__game.table);
+await page.waitForFunction(() => window.__game && window.__game.table && window.__autoplay);
 await page.evaluate(() => {
   const g = window.__game;
   window.__table.skipChoreography();
@@ -46,7 +46,7 @@ const NEARLY_WON = {
 for (const game of ['klondike', 'tripeaks', 'golf', 'pyramid', 'freecell']) {
   const r = await page.evaluate(async ({ game, nearly }) => {
     const g = window.__game;
-    const { nextMove } = await import('/src/rules/autoplay.ts');
+    const { nextMove } = window.__autoplay;
     g.switchGame(game);
     window.__table.skipChoreography();
     const winsBefore = g.state.stats.totalWins;

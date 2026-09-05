@@ -180,3 +180,79 @@ describe('constellation effects land in the one derivation pass', () => {
     expect(d.burstMult.eq(2)).toBe(true);
   });
 });
+
+// ---- the eight new nodes (docs/02 §9 "more to buy": deeper branches, one rule twist) ---------
+
+describe('new constellation nodes', () => {
+  let state: GameState;
+  beforeEach(() => {
+    state = createInitialState(0);
+    for (const card of state.cards) card.awake = true;
+  });
+
+  it('requires every new node to a real, already-existing branch node', () => {
+    const newIds = [
+      'long-memory', 'measured-cut', 'steady-rhythm', 'second-wind',
+      'night-watch', 'quiet-hours', 'stacked-odds', 'second-reading'
+    ];
+    for (const id of newIds) {
+      const def = CONSTELLATION.find((n) => n.id === id);
+      if (!def) throw new Error(`missing ${id}`);
+      expect(def.requires.length).toBeGreaterThan(0);
+      for (const req of def.requires) expect(CONSTELLATION.map((n) => n.id)).toContain(req);
+    }
+  });
+
+  it('Long Memory deepens startCharge past Warm Start', () => {
+    state.prestige.constellation['long-memory'] = 3; // add 1 per level
+    expect(derive(state).startCharge).toBe(3);
+  });
+
+  it('Measured Cut deepens cutYield past Sharper Cut', () => {
+    const before = derive(state).cutYieldMult;
+    state.prestige.constellation['measured-cut'] = 2; // per 0.08
+    const after = derive(state).cutYieldMult;
+    expect(after.div(before).toNumber()).toBeCloseTo(1.16, 10);
+  });
+
+  it('Steady Rhythm and Second Wind deepen the Hand branch past Quick Hands/Last Light', () => {
+    state.prestige.constellation['steady-rhythm'] = 1; // spark per 0.3
+    state.prestige.constellation['second-wind'] = 1; // burst per 0.4
+    const d = derive(state);
+    expect(d.sparkMult.toNumber()).toBeCloseTo(1.3, 10);
+    expect(d.burstMult.toNumber()).toBeCloseTo(1.4, 10);
+  });
+
+  it('Quiet Hours deepens dealerSpeed past Practised Dealer', () => {
+    state.prestige.constellation['night-shift'] = 1;
+    const before = derive(state).dealerBeatSeconds;
+    state.prestige.constellation['quiet-hours'] = 2; // per 0.08
+    const after = derive(state).dealerBeatSeconds;
+    expect(after).toBeCloseTo(0.9 / 1.16, 10);
+    expect(after).toBeLessThan(before);
+  });
+
+  it('Stacked Odds deepens the Gambler branch with a plain globalMult', () => {
+    const before = derive(state).mults.global;
+    state.prestige.constellation['stacked-odds'] = 2; // per 0.12
+    const after = derive(state).mults.global;
+    expect(after.div(before).toNumber()).toBeCloseTo(1.24, 10);
+  });
+
+  it('Second Reading deepens Scholar mark slots past Marginalia', () => {
+    state.prestige.constellation['second-reading'] = 2;
+    expect(derive(state).markSlots).toBe(2);
+  });
+
+  it('Night Watch is a RULE twist, not a number: it flips autoDealerAlwaysOn and nothing else', () => {
+    const before = derive(state);
+    expect(before.autoDealerAlwaysOn).toBe(false);
+
+    state.prestige.constellation['night-watch'] = 1;
+    const after = derive(state);
+    expect(after.autoDealerAlwaysOn).toBe(true);
+    // Nothing numeric moves: the deck rate is exactly what it was before the twist.
+    expect(after.deckRate.eq(before.deckRate)).toBe(true);
+    expect(after.autoDealerUnlocked).toBe(before.autoDealerUnlocked);
+  });
+});

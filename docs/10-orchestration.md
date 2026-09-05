@@ -17,8 +17,13 @@ architecture, review, validation, and commits.
 
 ## Gates
 1. `npm run check` (svelte-check + tsc) clean. 2. `npm test` green. 3. For table/host/rules changes:
-`npm run test:browser` (real gestures) green. 4. Balance changes: `npm run sim` within the pacing
-contract. 5. Orchestrator reads the diff.
+`npm run test:browser` green — ten probes against a **production build**: gestures, cut-flow, marks-flow,
+reshuffle-flow, cloud, ipad (real touch events), riffle, win-all (every game), dealer, scholar.
+4. Balance changes: `npm run sim` within the pacing contract. 5. Orchestrator reads the diff.
+
+Capture the gate's exit code directly (`npm run test:browser > log; echo $?`) — piping into `grep` and
+reading `PIPESTATUS` after an intervening `echo` reports the echo's status, and a truncated run then
+reads as a pass. A probe must never `import()` `/src/**.ts`: that path exists only on the dev server.
 
 ## Subagent brief template
 Goal · files it may touch · the contract it implements (paste the interface) · tests it must add ·

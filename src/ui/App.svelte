@@ -20,9 +20,14 @@
       await table.mount(feltEl);
       host.attachTable(table);
       booted = true;
-      if (import.meta.env.DEV || location.search.includes('test')) {
-        (window as unknown as { __game: GameHost; __table: Table }).__game = host;
-        (window as unknown as { __game: GameHost; __table: Table }).__table = table;
+      if (import.meta.env.DEV || new URLSearchParams(location.search).has('test')) {
+        const w = window as unknown as Record<string, unknown>;
+        w.__game = host;
+        w.__table = table;
+        // Browser probes run against the production build, where `/src/**.ts` does not exist — so the
+        // app hands them the modules. Dynamic imports keep both out of the main chunk.
+        void import('../rules/autoplay').then((m) => (w.__autoplay = m));
+        void import('../rules/solver/klondike').then((m) => (w.__solver = m));
       }
     })();
     return () => { host.destroy(); table?.destroy(); };

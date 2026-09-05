@@ -111,4 +111,9 @@ docs/  brainstorming/  memory/  .claude/{agents,skills}
   hint that telegraphs a move, the Keeper's first note, constellations in the window, layered sound with a
   volume slider, an off-canvas keyboard/screen-reader layer, Gambler Mark fizzle, payout constants in
   `content/economy.json`. 443 tests.
-- Open: DynamoDB store + real auth, Ascension (layer 3), per-game statistics, sound *samples*, a Lighthouse pass.
+- **Content depth** — run upgrades in two tiers (19), 22 Constellation nodes across five branches, 14 Marks.
+  The tier-2 upgrades are decisions rather than more of the same (Comeback pays *more* when little is awake;
+  Underdog Suits and Favored Suit pull against each other; Fresh Cards pulls against Patience). Every capped
+  upgrade maxes at 49–71 simulated minutes, asserted at a 40-minute floor in `tests/balance.test.ts`.
+- Open: DynamoDB store + real auth, Ascension (layer 3 — see `docs/12-ascension.md` for the deck-size
+  refactor it needs first), sound *samples*, a Lighthouse pass.

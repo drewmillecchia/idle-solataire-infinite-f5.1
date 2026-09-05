@@ -77,6 +77,11 @@ const HK = cardId('H', 13);
 // ---- content -----------------------------------------------------------------------------
 
 describe('marks content', () => {
+  it('has unique ids', () => {
+    const ids = MARKS.map((m) => m.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
   it('parses via its schema and holds the fourteen documented marks', () => {
     expect(() => MarksSchema.parse(marksJson)).not.toThrow();
     expect(MARKS.map((m) => m.id).sort()).toEqual(

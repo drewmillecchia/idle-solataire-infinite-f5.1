@@ -64,13 +64,26 @@ The build system. **Deterministic, placed, limited.** No shop, no draw, no inven
 | **Glass** | *Rules twist:* this card is dealt face-up even where the game deals face-down. | Planning |
 | **Heavy** | Tableau moves of this card count as a home play for charge (not for waking). | Echo/Kindling engines |
 | **Tithe** | This card's output is 0, but every other card of its suit gets +25%. | Lantern stacking |
+| **Ember** | When this card wakes, the last card to come home before it gains a charge. | Echo, Kindling (the credited card can chain further) |
+| **Ledger** | This card's charge counts twice toward Devotion. | Heavy, Wick (both pile up charge fast) |
+| **Compass** | While this card is awake, the lowest-charged awake card of its suit earns as if it had this card's charge. | Lantern/Tithe (suit-wide builds), Anchor (keep the donor's charge through a cut) |
+| **Wick** | Each hand won adds a charge to this card, until its charge reaches five. | Anchor (bank the five for free), Ledger (double it toward Devotion) |
 
-Slots: 0 until the first Cut, then 1, plus Constellation nodes (First Mark, Marginalia). Chains stop at depth 3.
+Slots: 0 until the first Cut, then 1, plus Constellation nodes (First Mark, Marginalia, Second Reading). Chains stop at depth 3.
 A card carries at most one Mark — except **Twin, which is the wire**: a Twin may share a card with one other Mark, so Twin + Kindling on the same card is the canonical first combo.
 
 Design rules for Marks: each is one sentence; each has a visible glyph on the card; each has at
 least one *interesting* partner; no Mark is strictly best. Rule-twist Marks are how "special cards
 put twists into the games" happens *without* changing the deck's identity.
+
+**New content-JSON effect kinds** (docs/02 §9's "more to buy," CLAUDE.md invariant #2 — all folded
+into `economy/derive.ts`'s one derivation pass, nowhere else): run-upgrade kinds `comebackMult`
+(pays more the fewer cards are awake), `handsWonMult` (scales with hands won this run),
+`sparkForBurst` (trades spark for burst), `chargeMultFace` (extra charge multiplier, face cards
+only), `laggardSuitMult` / `topSuitMult` (boost the two least- or the one most-played suit),
+`chainMult` (rewards a long hand), and `freshCardMult` (boosts still-young cards); one Constellation
+kind, `dealerAlwaysOn` — a rule twist, not a number: the Auto-Dealer keeps dealing even while the
+player is at the table, not only through the idle wait.
 
 ## 5. Ways — how you play the next run
 
@@ -137,7 +150,7 @@ Constellation extends to 24 h. Welcome-back is a non-blocking ledger entry, not 
 | Whole deck awake | inside the first run |
 | First Cut (engaged sim player) | 12–30 min |
 | Cuts per hour, hours 2–4 (engaged sim, cut when ≥1 and ≥30 % of lifetime) | 2–4 (was 3–6; see tuning log 2026-09-05 — the potential is scale-free by design, so runs lengthen as lifetime Cuts grow; Cuts *earned* per hour is 6–9) |
-| Run-upgrade tier exhausted | ~2 h engaged |
+| Every capped upgrade maxed (both tiers) | 49–71 min engaged; asserted at a **40-minute floor** in `tests/balance.test.ts`. Tier 2 reveals on cards-sent-home, so it does not touch the first cut. |
 | Reshuffle reveal | 12 cuts *performed* (≈ 5–7 h engaged; the layer is already worth taking when it appears) |
 | Relaxer, 3 hands/day, no panels | still sees a new milestone at least every 2–3 days for the first month |
 | No economy divergence | 24 sim-hours engaged, finite |

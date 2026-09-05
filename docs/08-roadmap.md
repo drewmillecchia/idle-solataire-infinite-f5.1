@@ -54,6 +54,12 @@ non-obvious. Status is kept here and in `CLAUDE.md`.
 - Real-iPad pass (drag feel, safe areas, standalone); Lighthouse PWA; reduced-motion; a11y layer.
 - ~~Golf, Pyramid~~ ✅ (2026-09-05); Idle Riffle toy; more shuffle styles.
 
+## Content depth ✅ (2026-09-05)
+Two tiers of run upgrades (19), 22 Constellation nodes over five branches, 14 Marks. The tier-2 upgrades
+are decisions rather than more of the same: Comeback pays *more* while little is awake, Underdog Suits and
+Favored Suit pull against each other, Fresh Cards pulls against Patience. Night Watch is the first node
+that changes a rule rather than a number — the dealer stops waiting for you to look away.
+
 ## Later
 Ascension (Joker → Stars ★), FreeCell, Spider, real auth, leaderboards-that-matter, DynamoDB store,
 Gambler Mark fizzle, Idle Riffle toy, sound design pass with samples, a hint that replays the Scholar's line.
