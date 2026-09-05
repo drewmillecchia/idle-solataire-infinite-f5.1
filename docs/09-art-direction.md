@@ -68,5 +68,6 @@ numeric journey bar for people who want the number.
 │ footer: odometer strip (52! position) · new hand · undo · dealer │  ~48px
 └──────────────────────────────────────────────────────────────────┘
 ```
-The rail collapses to icons under 1000 px wide and slides over the felt on phones. Safe-area insets
-respected in standalone mode.
+Under 1000 px the rail leaves the grid entirely and slides over the felt as a drawer, opened by a handle
+on the right edge and dismissed by a scrim — a squeezed 56 px column was unreadable and made the page
+scroll sideways. Safe-area insets are respected in standalone mode.

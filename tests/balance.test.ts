@@ -8,6 +8,15 @@
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { runSim, type SimResult } from '../sim/run';
+import {
+  createInitialState, step, homeCard, tableauSpark, winHand, dealHand,
+  buyUpgrade, visibleUpgrades, upgradeCost, maxAffordable
+} from '$engine/index';
+import { EventBus } from '$engine/events';
+import { mulberry32 } from '$engine/rng';
+import { NO_TWISTS } from '$rules/module';
+import { gameById } from '$rules/registry';
+import { nextMove } from '$rules/autoplay';
 
 const SEEDS = [1, 2, 3, 4, 5];
 /** Long enough to contain the first cut on every seed, short enough to run five of them. */

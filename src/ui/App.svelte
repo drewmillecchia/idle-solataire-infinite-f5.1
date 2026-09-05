@@ -166,7 +166,9 @@
   .won-burst { margin: 4px 0 0; color: var(--brass-dim); font-size: 16px; }
   @keyframes rise { from { opacity: 0; transform: translate(-50%, -40%); } to { opacity: 1; transform: translate(-50%, -50%); } }
   .offline button { color: var(--brass-dim); font-weight: 600; }
-  @media (max-width: 1000px) {
-    .app { grid-template-columns: 1fr 56px; }
+  /* Below the breakpoint the rail slides over the felt instead of squeezing into a column
+     (see Rail.svelte), so the grid gives the whole width to the table. */
+  @media (max-width: 999px) {
+    .app { grid-template-columns: 1fr; grid-template-areas: 'hud' 'stage' 'footer'; }
   }
 </style>

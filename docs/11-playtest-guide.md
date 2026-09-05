@@ -58,6 +58,9 @@ back. Feel notes go in `memory/tuning-log.md`; bugs go straight into the convers
 - **Every game** is one click away: the game's name in the bottom-left opens a picker with a line
   about each. Rule options (draw one or three, redeals, free cells) stay in Settings.
 - **Hint** in the footer glows a move it would make, without making it. Free and unlimited.
+- **Feel presets** at the top of the Feel tab: the desk, crisp, heavy stock, playful, calm. Start from
+  whichever is closest and tune from there; tell me which one you kept.
+- **Turn the iPad portrait** if you like: the rail becomes a drawer with a handle on the right edge.
 
 ## Known gaps (do not report)
 No sound *samples* yet (everything is synthesised); no Ascension; Golf and Pyramid have had no feel
