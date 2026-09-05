@@ -85,6 +85,19 @@ function v4ToV5(raw: RawSave): RawSave {
   return { ...raw, version: 5, run };
 }
 
+/** v6 adds lifetime per-game records; older saves start them empty. */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+function v5ToV6(raw: RawSave): RawSave {
+  const stats = asRecord(raw.stats);
+  if (!isRecord(stats.perGame)) stats.perGame = {};
+  raw.stats = stats;
+  raw.version = 6;
+  return raw;
+}
+
 export function migrate(raw: RawSave): RawSave {
   const version = typeof raw.version === 'number' ? raw.version : 0;
   switch (version) {
@@ -97,6 +110,8 @@ export function migrate(raw: RawSave): RawSave {
     case 4:
       return v4ToV5(raw);
     case 5:
+      return v5ToV6(raw);
+    case 6:
       return raw;
     default:
       // Unknown, missing, or future version: pass through. `deserialize`'s repair pass fills

@@ -14,7 +14,7 @@ import type { GameEvent, CardId } from '$engine/types';
 import {
   createInitialState, type GameState, TICK_HZ, step, applyOffline, derive, type Derived,
   homeCard, tableauSpark, spark, winHand, dealHand, serialize, deserialize, exportString, importString,
-  formatNumber, formatRate, visibleUpgrades, upgradeCost, buyUpgrade, maxAffordable, nextMilestone, SAVE_VERSION,
+  D, formatNumber, formatRate, formatDuration, visibleUpgrades, upgradeCost, buyUpgrade, maxAffordable, nextMilestone, SAVE_VERSION,
   cutPotential, cutsOnCut, canCut, performCut, cutThreshold, runEarned,
   nodeLevel, nodeCost, canBuyNode, buyNode, visibleNodes,
   attachMarks, twistsFor, availableMarks, canPlace, placeMark, removeMark, placementFor, markSlots, usedSlots, markDef,
@@ -59,6 +59,9 @@ export interface View {
   upgrades: { id: string; name: string; blurb: string; owned: number; max: number | null; cost: string; affordable: boolean; effect: string }[];
   offline: { seconds: number; earned: string } | null;
   wonBanner: { burst: string } | null;
+  milestone: { id: string; label: string; ledger: string; value: string } | null;
+  /** Bumped each time a milestone lands, so the window can flash. */
+  milestoneFlash: number;
   lastGesture: string;
   storageWarning: boolean;
   firstRun: boolean;
@@ -104,7 +107,7 @@ export interface View {
   constellation: { id: string; name: string; blurb: string; branch: string; level: number; max: number; cost: string; affordable: boolean; effect: string }[];
   gameId: string;
   gameName: string;
-  games: { id: string; name: string; blurb: string }[];
+  games: { id: string; name: string; blurb: string; hands: number; wins: number; best: string | null }[];
   gameOptions: { option: GameOption; value: string }[];
   settings: GameState['settings'];
 }
@@ -136,6 +139,14 @@ export class GameHost implements TableHost {
   private ledger: Ledger[] = [];
   private offlineNotice: View['offline'] = null;
   private wonBanner: View['wonBanner'] = null;
+  private milestoneBanner: View['milestone'] = null;
+  private milestoneFlash = 0;
+  private milestoneTimer: ReturnType<typeof setTimeout> | null = null;
+  dismissMilestone(): void {
+    if (this.milestoneTimer) { clearTimeout(this.milestoneTimer); this.milestoneTimer = null; }
+    this.milestoneBanner = null;
+    this.pushView();
+  }
   private cutting = false;
   private stopped = false;
 
@@ -730,8 +741,16 @@ export class GameHost implements TableHost {
       case 'hand-won': this.sound('bloom', 0.8); this.haptic('success'); break;
       case 'milestone': {
         const m = MILESTONES.find((x) => x.id === e.id);
-        if (m) this.ledger.unshift({ id: m.id, text: m.ledger, at: Date.now() });
-        this.sound('chime', 0.9);
+        if (m) {
+          this.ledger.unshift({ id: m.id, text: m.ledger, at: Date.now() });
+          // A number this size passing deserves more than a chime, but not a modal.
+          this.milestoneBanner = { id: m.id, label: m.label, ledger: m.ledger, value: formatNumber(D(m.value)) };
+          this.milestoneFlash++;
+          if (this.milestoneTimer) clearTimeout(this.milestoneTimer);
+          this.milestoneTimer = setTimeout(() => { this.milestoneBanner = null; this.milestoneTimer = null; this.pushView(); }, 7000);
+        }
+        this.sound('milestone', 0.9);
+        this.haptic('success');
         break;
       }
       case 'purchase': this.derived = derive(this.state); break;
@@ -763,7 +782,7 @@ export class GameHost implements TableHost {
     return {
       revision: 0, shuffles: '0', lifetime: '0', rate: '0/s', awake: 0, cutsPerformed: 0, handsWon: 0, handsPlayed: 0,
       moves: 0, won: false, stuck: false, canUndo: false, dealerActive: false, dealerUnlocked: false, dealerCountdown: 0,
-      nextMilestoneLabel: '', nextMilestoneProgress: 0, journey: 0, ledger: [], toasts: [], upgrades: [], offline: null, wonBanner: null, lastGesture: '', storageWarning: false, firstRun: false, cloud: { enabled: false, status: 'off' }, scholarThinking: false,
+      nextMilestoneLabel: '', nextMilestoneProgress: 0, journey: 0, ledger: [], toasts: [], upgrades: [], offline: null, wonBanner: null, milestone: null, milestoneFlash: 0, lastGesture: '', storageWarning: false, firstRun: false, cloud: { enabled: false, status: 'off' }, scholarThinking: false,
       cut: { revealed: false, canCut: false, cutsOnCut: '0', progress: 0, potential: '0', runEarned: '0', threshold: '0', cuts: '0', lifetimeCuts: '0', cutsPerformed: 0, way: 'none', ways: [], cutting: false },
       constellation: [],
       reshuffle: { revealed: false, can: false, onReshuffle: '0', progress: 0, cycleCuts: '0', threshold: '0', permutations: '0', lifetimePermutations: '0', reshuffles: 0 },
@@ -798,7 +817,14 @@ export class GameHost implements TableHost {
         id: n.id, name: n.name, blurb: n.blurb, branch: n.branch, level: nodeLevel(s, n.id), max: n.max,
         cost: formatNumber(nodeCost(s, n.id)), affordable: canBuyNode(s, n.id), effect: describeNode(n.effect)
       })),
-      games: GAMES.map((g) => ({ id: g.id, name: g.name, blurb: g.blurb })),
+      games: GAMES.map((g) => {
+        const rec = s.stats.perGame[g.id];
+        return {
+          id: g.id, name: g.name, blurb: g.blurb,
+          hands: rec?.hands ?? 0, wins: rec?.wins ?? 0,
+          best: rec?.bestSeconds != null ? formatDuration(rec.bestSeconds) : null
+        };
+      }),
       gameOptions: this.module.options.map((option) => ({ option: { ...option, values: option.values.map((v) => ({ ...v })) }, value: this.config()[option.id] ?? option.default })),
     };
   }
@@ -849,6 +875,8 @@ export class GameHost implements TableHost {
       toasts: this.toasts.slice(),
       offline: this.offlineNotice,
       wonBanner: this.wonBanner,
+      milestone: this.milestoneBanner,
+      milestoneFlash: this.milestoneFlash,
       storageWarning: this.storageWarning,
       // The one thing a new Keeper is told. It goes as soon as the first card comes home.
       firstRun: !this.firstRunDismissed && s.stats.totalHomed === 0 && s.prestige.cutsPerformed === 0,

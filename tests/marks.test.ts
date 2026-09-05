@@ -485,7 +485,7 @@ describe('Anchor', () => {
 
 // ---- save --------------------------------------------------------------------------------
 
-describe('save v4', () => {
+describe('save round-trip', () => {
   it('round-trips placements and rebuilds the card cache', () => {
     const state = markState();
     const { bus } = withBus();
@@ -495,7 +495,6 @@ describe('save v4', () => {
 
     const restored = deserialize(serialize(state));
     expect(restored.version).toBe(SAVE_VERSION);
-    expect(SAVE_VERSION).toBe(5);
     expect(restored.marks.placed).toEqual([
       { mark: 'twin', cards: [SA, HK] },
       { mark: 'lantern', cards: [D3] }
@@ -726,8 +725,10 @@ describe('save v5', () => {
     delete hand.seed;
     delete hand.fizzleSeq;
 
+    // `migrate` advances one version per call; this asserts the 4 -> 5 step, not the whole chain.
     const migrated = migrate(raw) as Record<string, unknown>;
     expect(migrated.version).toBe(5);
+    expect(SAVE_VERSION).toBeGreaterThanOrEqual(5);
     const migratedHand = (migrated.run as Record<string, unknown>).hand as Record<string, unknown>;
     expect(migratedHand.seed).toBe(0);
     expect(migratedHand.fizzleSeq).toBe(0);

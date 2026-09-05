@@ -6,7 +6,7 @@ import { D } from './numbers';
 import type { CardId, CardState, NumberingId, WayId } from './types';
 
 /** Bump on any state-shape change; add a matching branch in save/migrate.ts. */
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 
 /** Per-hand scratch for the Marks that only reach across one hand. Reset by `dealHand`. */
 export interface HandState {
@@ -94,6 +94,14 @@ export interface SettingsState {
   volume: number;
 }
 
+/** What a player has done at one game. Keyed by `GameModule.id`. */
+export interface GameRecord {
+  hands: number;
+  wins: number;
+  /** Fastest win in seconds, or null before the first win. */
+  bestSeconds: number | null;
+}
+
 export interface StatsState {
   totalHomed: number;
   totalHands: number;
@@ -103,6 +111,8 @@ export interface StatsState {
   /** Shortest run (seconds) that ended in a Cut, or null before the first Cut. */
   fastestCutSeconds: number | null;
   totalCuts: number;
+  /** Hands, wins and best time per game. Lifetime — a Cut does not clear it. */
+  perGame: Record<string, GameRecord>;
 }
 
 export interface GameState {
@@ -179,7 +189,8 @@ export function createInitialState(now: number): GameState {
       bestRate: D(0),
       playSeconds: 0,
       fastestCutSeconds: null,
-      totalCuts: 0
+      totalCuts: 0,
+      perGame: {}
     },
     activeGame: 'klondike',
     gameConfig: {}

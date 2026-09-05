@@ -23,7 +23,7 @@
       <span class="num value violet">{host.view.cut.cuts}</span>
     </div>
   {/if}
-  <div class="sky"><Sky journey={host.view.journey} /></div>
+  <div class="sky"><Sky journey={host.view.journey} flash={host.view.milestoneFlash} /></div>
   <div class="stat right">
     <span class="label">{host.view.nextMilestoneLabel}</span>
     <span class="bar"><span class="fill" style:width={`${host.view.nextMilestoneProgress * 100}%`}></span></span>

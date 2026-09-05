@@ -44,6 +44,15 @@ export interface WinHandParams {
 }
 
 /** Pays the win burst: 60s of deckRate x burstMult, halved-ish (x0.7) if the hand used an undo. */
+/** The lifetime record for one game, created on first use. Never cleared by a Cut or a Reshuffle. */
+export function gameRecord(state: GameState, game: string) {
+  const existing = state.stats.perGame[game];
+  if (existing) return existing;
+  const fresh = { hands: 0, wins: 0, bestSeconds: null as number | null };
+  state.stats.perGame[game] = fresh;
+  return fresh;
+}
+
 export function winHand(state: GameState, bus: EventBus, params: WinHandParams): Decimal {
   const d = derive(state);
   // The Scholar's undo is free; elsewhere a hand with undos pays the penalty (docs/06 — a nudge, not a punishment).
@@ -62,6 +71,9 @@ export function winHand(state: GameState, bus: EventBus, params: WinHandParams):
 
   state.run.handsWon += 1;
   state.stats.totalWins += 1;
+  const rec = gameRecord(state, params.game);
+  rec.wins += 1;
+  if (rec.bestSeconds === null || params.seconds < rec.bestSeconds) rec.bestSeconds = params.seconds;
 
   if (state.run.way === 'scholar') {
     // Way of the Scholar (docs/02 §5): every win charges the whole awake deck.
@@ -81,6 +93,7 @@ export function dealHand(state: GameState, bus: EventBus, game: string, seed: nu
   if (opts.count !== false) {
     state.run.handsPlayed += 1;
     state.stats.totalHands += 1;
+    gameRecord(state, game).hands += 1;
   }
   state.run.undosThisHand = 0;
   state.run.hand = {

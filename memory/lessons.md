@@ -13,6 +13,12 @@ Newest first. One entry per lesson: **what happened → what we do now.**
 - Unit tests never saw the engine/host seam → real-gesture browser tests.
 - Plugin contracts leaked `if (gameId)` into shared code → the contract is the only surface; fix it, don't route around it.
 
+## 2026-09-05 — session 4 (polish, five games)
+- **Tests that pin `SAVE_VERSION` to a literal break on every bump** and assert nothing about the feature under test. → Assert `SAVE_VERSION` for a round-trip; assert a literal only when testing one migration *step*, with a comment saying so.
+- **Sizing a grid for a game's worst case makes every card tiny at the deal** (FreeCell sized `rows` for a 20-card column). → The renderer compresses a pile's fan when it outgrows the grid, so a module can size for the common case. This is what a person does with real cards.
+- **Svelte swallows whitespace around an inline `{#if}`** — `{g.hands}{#if g.best} · best{/if}` renders "11· best". → Put the separator inside the expression: `{' · best ' + g.best}`.
+- Agents working in parallel on one file's *type* (SettingsState) and another's *literal* (the host's fallback) will leave `check` red between landings; the orchestrator patches the one-liner rather than waking an agent.
+
 ## 2026-09-05 — session 4 (iPad platform pass)
 - **Touch taps were silently broken while touch drags worked.** `nativeEvent.timeStamp` on touch events is on an inconsistent epoch — a 60 ms tap measured 953 ms, so the tap branch never fired. → A release that never moved is a tap, whatever the clock says; durations use `performance.now()` only. Mouse-event tests could never have caught this: **test the touch path with real touch events** (`Input.dispatchTouchEvent` over CDP).
 - **`CardSprite.resize()` ran for all 52 cards on every board push**, rebuilding four Graphics and re-rasterising text each time. → Early-return when the size is unchanged.

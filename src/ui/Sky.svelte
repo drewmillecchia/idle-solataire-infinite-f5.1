@@ -8,7 +8,7 @@
    * from the element). A normalised 0..100 box with preserveAspectRatio="none" would stretch every
    * star into an oval and flatten the constellations into scratches.
    */
-  let { journey }: { journey: number } = $props();
+  let { journey, flash = 0 }: { journey: number; flash?: number } = $props();
 
   let w = $state(600);
   let h = $state(64);
@@ -74,6 +74,9 @@
 </script>
 
 <div class="frame" bind:clientWidth={w} bind:clientHeight={h}>
+  {#key flash}
+    {#if flash > 0}<div class="flash" aria-hidden="true"></div>{/if}
+  {/key}
   <svg viewBox={`0 0 ${w} ${h}`} role="img" aria-label={`The window: ${label}`}>
     <defs>
       <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
@@ -109,6 +112,12 @@
 </div>
 
 <style>
-  .frame { width: 100%; height: 100%; }
+  .frame { width: 100%; height: 100%; position: relative; }
+  .flash {
+    position: absolute; inset: 0; z-index: 1; pointer-events: none; border-radius: 4px;
+    background: radial-gradient(ellipse at 50% 60%, rgba(223,233,255,0.5), rgba(223,233,255,0) 70%);
+    animation: sky-flash 1.6s ease-out forwards;
+  }
+  @keyframes sky-flash { from { opacity: 1; } to { opacity: 0; } }
   svg { display: block; width: 100%; height: 100%; border-radius: 4px; }
 </style>

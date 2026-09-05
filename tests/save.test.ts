@@ -111,3 +111,28 @@ describe('export / import strings', () => {
     expect(() => importString('!!!not base64 or json!!!')).not.toThrow();
   });
 });
+
+describe('save v6 — per-game records', () => {
+  it('migrates a v5 save and starts records empty', () => {
+    const v5 = JSON.parse(serialize(createInitialState(0))) as Record<string, unknown>;
+    v5.version = 5;
+    const stats = v5.stats as Record<string, unknown>;
+    delete stats.perGame;
+    const back = deserialize(JSON.stringify(v5));
+    expect(back.version).toBe(SAVE_VERSION);
+    expect(back.stats.perGame).toEqual({});
+  });
+
+  it('round-trips records and drops malformed entries', () => {
+    const s = createInitialState(0);
+    s.stats.perGame = { klondike: { hands: 9, wins: 3, bestSeconds: 41.5 } };
+    const back = deserialize(serialize(s));
+    expect(back.stats.perGame.klondike).toEqual({ hands: 9, wins: 3, bestSeconds: 41.5 });
+
+    const raw = JSON.parse(serialize(s)) as Record<string, unknown>;
+    (raw.stats as Record<string, unknown>).perGame = { klondike: 'nonsense', golf: { hands: -4, wins: 2 } };
+    const repaired = deserialize(JSON.stringify(raw));
+    expect(repaired.stats.perGame.klondike).toBeUndefined();
+    expect(repaired.stats.perGame.golf).toEqual({ hands: 0, wins: 2, bestSeconds: null });
+  });
+});

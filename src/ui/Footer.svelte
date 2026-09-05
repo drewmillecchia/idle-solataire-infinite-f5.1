@@ -22,6 +22,9 @@
               <button class:current={g.id === host.view.gameId} role="option" aria-selected={g.id === host.view.gameId} onclick={() => choose(g.id)}>
                 <span class="gname">{g.name}</span>
                 <span class="gblurb">{g.blurb}</span>
+                {#if g.hands > 0}
+                  <span class="num grec">{g.wins} won of {g.hands}{#if g.best}{' · best ' + g.best}{/if}</span>
+                {/if}
               </button>
             </li>
           {/each}
@@ -73,4 +76,5 @@
   .menu button.current { box-shadow: inset 0 0 0 1px var(--brass); }
   .gname { font-family: var(--font-serif); font-weight: 600; font-size: 14px; }
   .gblurb { font-size: 11px; color: var(--ink-soft); line-height: 1.35; }
+  .grec { font-size: 11px; color: var(--brass-dim); margin-top: 2px; }
 </style>

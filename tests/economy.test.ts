@@ -261,3 +261,21 @@ describe('milestones', () => {
     expect(ids).not.toContain('thousand');
   });
 });
+
+describe('per-game records', () => {
+  it('counts hands and wins per game, keeps the best time, and ignores uncounted deals', () => {
+    const state = createInitialState(0);
+    const bus = new EventBus();
+    dealHand(state, bus, 'klondike', 1);
+    dealHand(state, bus, 'golf', 2);
+    dealHand(state, bus, 'klondike', 3, { count: false }); // a restore, not a hand played
+    expect(state.stats.perGame.klondike?.hands).toBe(1);
+    expect(state.stats.perGame.golf?.hands).toBe(1);
+
+    winHand(state, bus, { game: 'klondike', moves: 10, seconds: 90 });
+    winHand(state, bus, { game: 'klondike', moves: 10, seconds: 55 });
+    expect(state.stats.perGame.klondike?.wins).toBe(2);
+    expect(state.stats.perGame.klondike?.bestSeconds).toBe(55);
+    expect(state.stats.perGame.golf?.wins).toBe(0);
+  });
+});

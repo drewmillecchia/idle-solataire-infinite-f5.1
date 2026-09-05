@@ -9,6 +9,7 @@
 import Decimal from 'break_eternity.js';
 import { createInitialState, SAVE_VERSION } from '../state';
 import type {
+  GameRecord,
   GameState,
   HandState,
   MarksState,
@@ -282,8 +283,24 @@ function repairStats(value: unknown, fallback: StatsState): StatsState {
     bestRate: toDecimal(value.bestRate, fallback.bestRate),
     playSeconds: Math.max(0, toNum(value.playSeconds, fallback.playSeconds)),
     fastestCutSeconds: toNumOrNull(value.fastestCutSeconds, fallback.fastestCutSeconds),
-    totalCuts: Math.max(0, Math.floor(toNum(value.totalCuts, fallback.totalCuts)))
+    totalCuts: Math.max(0, Math.floor(toNum(value.totalCuts, fallback.totalCuts))),
+    perGame: repairPerGame(value.perGame)
   };
+}
+
+/** Per-game records: an entry with a bad shape is dropped rather than dragging the save down. */
+function repairPerGame(value: unknown): Record<string, GameRecord> {
+  if (!isRecord(value)) return {};
+  const out: Record<string, GameRecord> = {};
+  for (const [id, entry] of Object.entries(value)) {
+    if (!isRecord(entry)) continue;
+    out[id] = {
+      hands: Math.max(0, Math.floor(toNum(entry.hands, 0))),
+      wins: Math.max(0, Math.floor(toNum(entry.wins, 0))),
+      bestSeconds: toNumOrNull(entry.bestSeconds, null)
+    };
+  }
+  return out;
 }
 
 function repairGameConfig(value: unknown): Record<string, Record<string, string>> {

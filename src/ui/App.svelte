@@ -51,6 +51,15 @@
         <p class="note-sign">There are fifty-two. — K.</p>
       </button>
     {/if}
+    {#if host.view.milestone}
+      {#key host.view.milestone.id}
+        <button class="milestone" onclick={() => host.dismissMilestone()} aria-label="Dismiss">
+          <span class="ms-label">{host.view.milestone.label}</span>
+          <span class="num ms-value">{host.view.milestone.value}</span>
+          <span class="ms-ledger">{host.view.milestone.ledger}</span>
+        </button>
+      {/key}
+    {/if}
     {#if host.view.wonBanner}
       <div class="won">
         <p class="won-title">Hand won.</p>
@@ -119,6 +128,20 @@
   }
   .offline p { margin: 0; }
   .warn { top: auto; bottom: 14px; background: var(--rouge); color: var(--paper); }
+  .milestone {
+    position: absolute; left: 50%; top: 12px; transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    background: var(--paper); color: var(--ink); padding: 10px 22px; border-radius: var(--radius);
+    box-shadow: var(--shadow); border-top: 3px solid var(--brass); max-width: 70%; text-align: center;
+    animation: arrive 0.5s cubic-bezier(0.2, 0.9, 0.3, 1);
+  }
+  .ms-label { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--brass-dim); }
+  .ms-value { font-family: var(--font-serif); font-size: 22px; color: var(--ink); line-height: 1.1; }
+  .ms-ledger { font-family: var(--font-serif); font-style: italic; font-size: 13px; color: var(--ink-soft); margin-top: 2px; }
+  @keyframes arrive {
+    from { opacity: 0; transform: translateX(-50%) translateY(-14px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
   .note {
     position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%) rotate(-0.6deg);
     background: var(--paper); color: var(--ink); padding: 14px 20px; border-radius: 3px;
