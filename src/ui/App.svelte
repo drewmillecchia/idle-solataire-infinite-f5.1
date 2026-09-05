@@ -6,6 +6,7 @@
   import Rail from './Rail.svelte';
   import Footer from './Footer.svelte';
   import Toasts from './Toasts.svelte';
+  import A11y from './A11y.svelte';
 
   const host = new GameHost();
   let feltEl: HTMLDivElement;
@@ -28,7 +29,9 @@
   });
 </script>
 
+<a class="skip-link" href="#a11y-card-table">Skip to card table controls</a>
 <div class="app">
+  <A11y {host} />
   <Hud {host} />
   <main class="stage">
     <div class="felt" bind:this={feltEl}></div>
@@ -55,6 +58,42 @@
 </div>
 
 <style>
+  /* Visually hidden until focused (Tab from page load lands here first), then visible top-left
+     in Night Desk colours — the one visual change a keyboard user sees; a mouse/touch player
+     never focuses it. See docs/09-art-direction.md for the palette. */
+  .skip-link {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .skip-link:focus {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    width: auto;
+    height: auto;
+    margin: 0;
+    padding: 10px 16px;
+    clip: auto;
+    overflow: visible;
+    white-space: normal;
+    z-index: 1000;
+    background: var(--paper);
+    color: var(--ink);
+    border: 2px solid var(--brass);
+    border-radius: var(--radius);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    box-shadow: var(--shadow);
+  }
   .app {
     height: 100%;
     display: grid;

@@ -263,7 +263,8 @@ function repairSettings(value: unknown, fallback: SettingsState): SettingsState 
     reducedMotion: toBool(value.reducedMotion, fallback.reducedMotion),
     autoDealerDelaySeconds: toNum(value.autoDealerDelaySeconds, fallback.autoDealerDelaySeconds),
     shuffleStyle: style,
-    cloud: toBool(value.cloud, fallback.cloud)
+    cloud: toBool(value.cloud, fallback.cloud),
+    volume: Math.max(0, Math.min(1, toNum(value.volume, fallback.volume)))
   };
 }
 

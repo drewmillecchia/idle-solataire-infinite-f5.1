@@ -5,16 +5,18 @@
  *
  * Shape (x in card widths, y in card heights; rows overlap by half a card, 28 one-card piles):
  *
- *   stock                          p0                             discard      y = 0.0
+ *                                  p0                                          y = 0.0
  *                               p1    p2                                       y = 0.5
- *   waste (y = 1.2)            p3    p4    p5                                   y = 1.0
+ *                            p3    p4    p5                                    y = 1.0
  *                           p6   p7   p8   p9                                  y = 1.5
  *                        p10 p11 p12 p13 p14                                   y = 2.0
- *                      p15 p16 p17 p18 p19 p20                                 y = 2.5
- *                    p21 p22 p23 p24 p25 p26 p27                               y = 3.0
+ *          stock       p15 p16 p17 p18 p19 p20                                 y = 2.2 / 2.5
+ *          waste     p21 p22 p23 p24 p25 p26 p27          discard              y = 3.0
  *
  * Row r holds r+1 cards at x = 1 + (6 - r) / 2 + c, so the pyramid is centred over columns 1..7 and
- * leaves column 0 for the stock/waste and column 8 for the discard.
+ * leaves column 0 for the stock/waste and column 8 for the discard. Those three sit low, level with
+ * the widest rows, so the dealer's hand reads as part of the same table rather than three lone
+ * outlines in the corners.
  *
  * Rule: a card is *exposed* when nothing covers it — a pyramid card whose two slots on the row below
  * are both empty, the waste top, or the stock top. Two exposed cards whose ranks sum to 13 leave
@@ -111,19 +113,19 @@ export const PYRAMID_SLOTS: readonly PyramidSlot[] = Object.freeze(
 );
 
 const STOCK_X = 0;
-const STOCK_Y = 0;
+const STOCK_Y = 2.2;
 const WASTE_X = 0;
-const WASTE_Y = 1.2;
+const WASTE_Y = 3;
 const DISCARD_X = 8;
-const DISCARD_Y = 0;
+const DISCARD_Y = 3;
 const GRID_COLS = 9;
 const GRID_GAP_Y = 0.098; // gapY in card heights, from layout.ts (0.14 * cardW, cardW = 0.7 * cardH)
 /**
  * layout.ts places a pile at y * (cardH + gapY) but sizes the felt as rows * cardH, so `rows` has to
  * cover the deepest row's y * 1.098 plus the card itself: 3.0 * 1.098 + 1 = 4.295 -> 4.3.
  */
-const GRID_ROWS =
-  Math.ceil(Math.max((PYRAMID_ROWS - 1) * ROW_STEP, WASTE_Y) * (1 + GRID_GAP_Y) * 20 + 20) / 20;
+const DEEPEST_Y = Math.max((PYRAMID_ROWS - 1) * ROW_STEP, STOCK_Y, WASTE_Y, DISCARD_Y);
+const GRID_ROWS = Math.ceil(DEEPEST_Y * (1 + GRID_GAP_Y) * 20 + 20) / 20;
 
 // --------------------------------------------------------------- pile ids ---
 

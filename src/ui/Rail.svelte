@@ -44,7 +44,8 @@
 <style>
   .rail { grid-area: rail; display: flex; flex-direction: column; min-height: 0; border-left: 1px solid rgba(201,164,92,0.18); background: #182d29; }
   .tabs { display: flex; flex-wrap: wrap; border-bottom: 1px solid rgba(201,164,92,0.18); }
-  .tabs button { flex: 1 0 auto; min-width: 60px; padding: 10px 6px; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--brass-dim); }
+  /* Four per row, so the row stays stable as Cut, Stars and Permute reveal themselves. */
+  .tabs button { flex: 1 0 25%; padding: 9px 2px; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--brass-dim); }
   .tabs button.active { color: var(--brass); box-shadow: inset 0 -2px 0 var(--brass); }
   .tabs button.glow { color: var(--lamp); text-shadow: 0 0 8px rgba(255,217,160,0.6); }
   .panel { flex: 1; overflow-y: auto; padding: 12px; min-height: 0; }

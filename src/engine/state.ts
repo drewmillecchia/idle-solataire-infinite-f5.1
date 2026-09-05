@@ -82,6 +82,8 @@ export interface SettingsState {
   shuffleStyle: 'riffle' | 'overhand' | 'random';
   /** Opt-in cloud save (docs/07). Off by default: local storage is the truth, the network an optimisation. */
   cloud: boolean;
+  /** Master audio volume, 0..1. Wired to `audio/presenters.ts`'s `setMasterVolume`. */
+  volume: number;
 }
 
 export interface StatsState {
@@ -159,7 +161,8 @@ export function createInitialState(now: number): GameState {
       reducedMotion: false,
       autoDealerDelaySeconds: 12,
       shuffleStyle: 'riffle',
-      cloud: false
+      cloud: false,
+      volume: 0.7
     },
     stats: {
       totalHomed: 0,

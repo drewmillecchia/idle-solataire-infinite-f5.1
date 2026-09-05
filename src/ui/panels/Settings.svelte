@@ -1,9 +1,16 @@
 <script lang="ts">
   import type { GameHost } from '../host.svelte';
+  import { sound, setMasterVolume, unlockAudio } from '../../audio/presenters';
+  import { SOUND_NAMES } from '../../audio/soundLab';
   let { host }: { host: GameHost } = $props();
   let exported = $state('');
   let importText = $state('');
   let importMsg = $state('');
+
+  function onVolume(v: number): void {
+    setMasterVolume(v);
+    host.setSetting('volume', v);
+  }
 </script>
 
 <div class="settings">
@@ -26,8 +33,20 @@
     </select>
   </label>
   <label class="row"><span>Sound</span><input type="checkbox" checked={host.view.settings.sound} onchange={(e) => host.setSetting('sound', (e.currentTarget as HTMLInputElement).checked)} /></label>
+  <label class="row"><span>Volume</span>
+    <span class="num">{Math.round(host.view.settings.volume * 100)}%</span>
+    <input type="range" min="0" max="1" step="0.01" value={host.view.settings.volume} oninput={(e) => onVolume(Number((e.currentTarget as HTMLInputElement).value))} />
+  </label>
   <label class="row"><span>Haptics</span><input type="checkbox" checked={host.view.settings.haptics} onchange={(e) => host.setSetting('haptics', (e.currentTarget as HTMLInputElement).checked)} /></label>
   <label class="row"><span>Reduced motion</span><input type="checkbox" checked={host.view.settings.reducedMotion} onchange={(e) => host.setSetting('reducedMotion', (e.currentTarget as HTMLInputElement).checked)} /></label>
+  <div class="block">
+    <span class="hint">Test sounds</span>
+    <div class="sound-grid">
+      {#each SOUND_NAMES as name (name)}
+        <button class="pill" onclick={() => { unlockAudio(); sound(name, 0.6); }}>{name}</button>
+      {/each}
+    </div>
+  </div>
   <label class="row"><span>Dealer waits</span>
     <span class="num">{host.view.settings.autoDealerDelaySeconds}s</span>
     <input type="range" min="3" max="60" step="1" value={host.view.settings.autoDealerDelaySeconds} oninput={(e) => host.setSetting('autoDealerDelaySeconds', Number((e.currentTarget as HTMLInputElement).value))} />
@@ -62,4 +81,7 @@
   .link { align-self: flex-start; color: var(--brass); font-weight: 600; }
   .danger .link { color: var(--rouge); }
   .msg { color: var(--moss); }
+  .sound-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pill { font-size: 11px; padding: 4px 8px; border-radius: 999px; border: 1px solid rgba(201,164,92,0.3); background: rgba(0,0,0,0.25); color: var(--paper); }
+  .pill:active { background: rgba(201,164,92,0.25); }
 </style>

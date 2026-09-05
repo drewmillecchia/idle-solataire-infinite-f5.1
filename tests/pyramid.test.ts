@@ -135,9 +135,10 @@ describe('view', () => {
     // rows are non-decreasing through the pile list, so a lower row paints over the one above
     const ys = v.piles.slice(0, PYRAMID_SLOT_COUNT).map((p) => p.y);
     expect(ys).toEqual([...ys].sort((a, b2) => a - b2));
-    expect(pile(b, 'stock')).toMatchObject({ x: 0, y: 0, kind: 'stock', fan: 'none' });
-    expect(pile(b, 'waste')).toMatchObject({ x: 0, y: 1.2, kind: 'waste', fan: 'none' });
-    expect(pile(b, 'discard')).toMatchObject({ x: 8, y: 0, kind: 'discard', fan: 'none' });
+    // The dealer's three piles sit low, level with the widest rows, not stranded in the corners.
+    expect(pile(b, 'stock')).toMatchObject({ x: 0, y: 2.2, kind: 'stock', fan: 'none' });
+    expect(pile(b, 'waste')).toMatchObject({ x: 0, y: 3, kind: 'waste', fan: 'none' });
+    expect(pile(b, 'discard')).toMatchObject({ x: 8, y: 3, kind: 'discard', fan: 'none' });
     expect(v.piles.every((p) => p.fan === 'none')).toBe(true);
     expect(v.piles.every((p) => p.kind !== 'peak' || p.id.startsWith('p'))).toBe(true);
 

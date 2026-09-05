@@ -27,7 +27,7 @@ import type { WayId, NumberingId } from '$engine/types';
 import type { Table, TableHost } from '../table/Table';
 import { loadSave, persistSave, requestPersistence, clearSaves, cmpProgress } from '../platform/storage';
 import { createCloudClient, resolveConflict, type CloudClient } from '../platform/cloud';
-import { sound, haptic, unlockAudio } from '../audio/presenters';
+import { sound, haptic, unlockAudio, setMasterVolume, isAudioReady } from '../audio/presenters';
 
 export interface Ledger {
   id: string;
@@ -461,9 +461,19 @@ export class GameHost implements TableHost {
     return true;
   }
 
+  /**
+   * The current board as a game-agnostic `BoardView` — read by the off-canvas a11y layer
+   * (docs/03-decisions.md ADR-003: the table is a canvas, so accessibility is a separate semantic
+   * layer, not the renderer) and any other read-only consumer. `board` itself stays the module's
+   * private shape; this is the seam that already exists for the table (`module.view(board)`).
+   */
+  get boardView(): BoardView { return this.module.view(this.board); }
+
   // TableHost --------------------------------------------------------------
   canPickUp(pile: string, index: number): boolean { return this.module.canPickUp(this.board, pile, index, this.twists()); }
   legalTargets(pile: string, index: number): string[] { return this.module.legalTargets(this.board, pile, index, this.twists()); }
+  /** The move `tap()` would make on this card, if any — used by the a11y layer's "Play … home" button. */
+  autoTargetFor(pile: string, index: number): string | null { return this.module.autoTarget(this.board, pile, index, this.twists()); }
   tryMove(pile: string, index: number, to: string): boolean {
     const moved = this.module.view(this.board).piles.find((p) => p.id === pile)?.cards.slice(index).map((c) => c.id) ?? [];
     const r = this.module.move(this.board, pile, index, to, this.twists());
@@ -491,7 +501,10 @@ export class GameHost implements TableHost {
   activity(): void {
     this.lastActivity = performance.now();
     this.dealerTimer = 0;
+    const wasReady = isAudioReady();
     unlockAudio();
+    // The context only exists after a gesture, so the saved volume is applied the first time it does.
+    if (!wasReady && isAudioReady()) setMasterVolume(this.state.settings.volume);
   }
   sound(name: string, velocity: number): void { if (this.state.settings.sound) sound(name, velocity); }
   haptic(name: string): void { if (this.state.settings.haptics) haptic(name); }
@@ -648,6 +661,7 @@ export class GameHost implements TableHost {
   }
   setSetting<K extends keyof GameState['settings']>(k: K, v: GameState['settings'][K]): void {
     this.state.settings[k] = v;
+    if (k === 'volume') setMasterVolume(this.state.settings.volume);
     if (this.table) this.table.reducedMotion = this.state.settings.reducedMotion || matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.pushView();
     void this.save();
@@ -713,7 +727,7 @@ export class GameHost implements TableHost {
       odometer: '0',
       deck: [],
       marks: { slots: 0, used: 0, available: [], placed: [], picking: null, canPlace: false },
-      gameId: 'klondike', gameName: 'Klondike', games: [], gameOptions: [], settings: { sound: true, haptics: true, reducedMotion: false, autoDealerDelaySeconds: 12, shuffleStyle: 'riffle', cloud: false }
+      gameId: 'klondike', gameName: 'Klondike', games: [], gameOptions: [], settings: { sound: true, haptics: true, reducedMotion: false, autoDealerDelaySeconds: 12, shuffleStyle: 'riffle', cloud: false, volume: 0.7 }
     };
   }
 
