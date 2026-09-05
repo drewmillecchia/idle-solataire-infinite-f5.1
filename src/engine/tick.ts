@@ -6,6 +6,7 @@ import type Decimal from 'break_eternity.js';
 import { D } from './numbers';
 import { derive } from './economy/derive';
 import { checkMilestones } from './economy/milestones';
+import { checkCutReveal } from './economy/prestige';
 import type { EventBus } from './events';
 import type { GameState } from './state';
 
@@ -25,6 +26,7 @@ export function step(state: GameState, dtSeconds: number, bus: EventBus): void {
     state.stats.bestRate = d.deckRate;
   }
   checkMilestones(state, bus);
+  checkCutReveal(state, d, bus);
 }
 
 export interface OfflineResult {

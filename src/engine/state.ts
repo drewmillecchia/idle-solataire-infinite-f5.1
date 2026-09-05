@@ -6,11 +6,18 @@ import { D } from './numbers';
 import type { CardState, NumberingId, WayId } from './types';
 
 /** Bump on any state-shape change; add a matching branch in save/migrate.ts. */
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 export interface RunState {
   way: WayId;
   startedAt: number;
+  /**
+   * `lifetimeShuffles` at the moment this run began. `runEarned = lifetimeShuffles - earnedAtStart`,
+   * which is how a Cut measures the run without ever touching the odometer (invariant #5).
+   */
+  earnedAtStart: Decimal;
+  /** ms timestamp when the Cut first became reachable this run, or null. UI velocity hint only. */
+  cutAvailableSeenAt: number | null;
   /** Upgrade id -> owned levels. */
   upgrades: Record<string, number>;
   handsPlayed: number;
@@ -28,6 +35,8 @@ export interface PrestigeState {
   reshuffles: number;
   /** Constellation node id -> level. */
   constellation: Record<string, number>;
+  /** Ways offered at the next Cut. The first Cut offers Hand and Dealer; others unlock on the tree. */
+  waysUnlocked: WayId[];
 }
 
 export interface SettingsState {
@@ -44,6 +53,9 @@ export interface StatsState {
   totalWins: number;
   bestRate: Decimal;
   playSeconds: number;
+  /** Shortest run (seconds) that ended in a Cut, or null before the first Cut. */
+  fastestCutSeconds: number | null;
+  totalCuts: number;
 }
 
 export interface GameState {
@@ -80,6 +92,8 @@ export function createInitialState(now: number): GameState {
     run: {
       way: 'none',
       startedAt: now,
+      earnedAtStart: D(0),
+      cutAvailableSeenAt: null,
       upgrades: {},
       handsPlayed: 0,
       handsWon: 0,
@@ -93,7 +107,8 @@ export function createInitialState(now: number): GameState {
       permutations: D(0),
       lifetimePermutations: D(0),
       reshuffles: 0,
-      constellation: {}
+      constellation: {},
+      waysUnlocked: ['hand', 'dealer']
     },
     revealed: [],
     milestones: [],
@@ -109,7 +124,9 @@ export function createInitialState(now: number): GameState {
       totalHands: 0,
       totalWins: 0,
       bestRate: D(0),
-      playSeconds: 0
+      playSeconds: 0,
+      fastestCutSeconds: null,
+      totalCuts: 0
     },
     activeGame: 'klondike',
     gameConfig: {}

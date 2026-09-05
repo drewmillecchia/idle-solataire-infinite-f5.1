@@ -12,6 +12,7 @@ try {
   }
   if (!up) throw new Error('preview did not start');
   execSync('node tools/gestures.mjs http://127.0.0.1:5200/?test=1', { stdio: 'inherit' });
+  execSync('node tools/cut-flow.mjs http://127.0.0.1:5200/?test=1', { stdio: 'inherit' });
 } finally {
   server.kill();
 }

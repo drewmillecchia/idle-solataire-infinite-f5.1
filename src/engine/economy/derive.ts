@@ -3,7 +3,7 @@
  * assembled here, and nowhere else. Callers read the result; they never multiply on their own.
  */
 import Decimal from 'break_eternity.js';
-import { UPGRADES } from '$content/index';
+import { CONSTELLATION, UPGRADES } from '$content/index';
 import { D } from '../numbers';
 import { rankValue } from '../numbering';
 import { cardDef } from '../types';
@@ -34,10 +34,26 @@ export interface Derived {
   sparkMult: Decimal;
   offlineCapSeconds: number;
   autoDealerUnlocked: boolean;
+  /** Cuts awarded by a Cut are multiplied by this (Constellation "Sharper Cut"). */
+  cutYieldMult: Decimal;
+  /** How many cards keep their wake through a Cut (the highest-charge ones). */
+  keepAwake: number;
+  /** Charge those surviving cards start the next run with. */
+  startCharge: number;
+  /**
+   * Fraction of its own charge a surviving card keeps through a Cut, floored at `startCharge`.
+   * Reserved: no Constellation node grants it yet (the Anchor mark will, in M4).
+   */
+  keepCharge: number;
+  /** Mark slots. Stored for M4; nothing reads it yet. */
+  markSlots: number;
+  /** Seconds between Auto-Dealer moves. */
+  dealerBeatSeconds: number;
 }
 
 const BASE_OFFLINE_HOURS = 8;
 const BASE_CHARGE_SLOPE = 0.1;
+const BASE_DEALER_BEAT_SECONDS = 0.9;
 
 export function derive(state: GameState): Derived {
   let global = D(1);
@@ -49,6 +65,11 @@ export function derive(state: GameState): Derived {
   let chargeSlope = BASE_CHARGE_SLOPE;
   let offlineHours = 0;
   let autoDealerUnlocked = false;
+  let cutYieldMult = D(1);
+  let keepAwake = 0;
+  let startCharge = 0;
+  let markSlots = 0;
+  let dealerSpeed = 0;
 
   const cardStates = state.cards;
   const awakeCount = cardStates.reduce((n, c) => (c.awake ? n + 1 : n), 0);
@@ -89,6 +110,49 @@ export function derive(state: GameState): Derived {
     }
   }
 
+  // Constellation: permanent, bought with Cuts. Folded into the SAME pass (invariant #2).
+  // Note its `globalMult` lands in `global`, so `cutThreshold`'s multiplier already includes it.
+  for (const node of CONSTELLATION) {
+    const level = state.prestige.constellation[node.id] ?? 0;
+    if (level <= 0) continue;
+    const effect = node.effect;
+    switch (effect.kind) {
+      case 'globalMult':
+        global = global.times(1 + effect.per * level);
+        break;
+      case 'keepAwake':
+        keepAwake += effect.add * level;
+        break;
+      case 'startCharge':
+        startCharge += effect.add * level;
+        break;
+      case 'offlineHours':
+        offlineHours += effect.add * level;
+        break;
+      case 'cutYield':
+        cutYieldMult = cutYieldMult.times(1 + effect.per * level);
+        break;
+      case 'dealerUnlock':
+        autoDealerUnlocked = true;
+        break;
+      case 'dealerSpeed':
+        dealerSpeed += effect.per * level;
+        break;
+      case 'burstMult':
+        burstMult = burstMult.times(1 + effect.per * level);
+        break;
+      case 'sparkMult':
+        sparkMult = sparkMult.times(1 + effect.per * level);
+        break;
+      case 'markSlots':
+        markSlots += effect.add * level;
+        break;
+      case 'wayUnlock':
+        // Applied at purchase (prestige.waysUnlocked); nothing to derive.
+        break;
+    }
+  }
+
   switch (state.run.way) {
     case 'hand':
       sparkMult = sparkMult.times(3);
@@ -97,6 +161,7 @@ export function derive(state: GameState): Derived {
     case 'dealer':
       global = global.times(1.5);
       sparkMult = sparkMult.times(0.5);
+      autoDealerUnlocked = true;
       break;
     default:
       // 'none', 'gambler', 'scholar': no adjustment in this slice.
@@ -136,6 +201,12 @@ export function derive(state: GameState): Derived {
     burstMult,
     sparkMult,
     offlineCapSeconds,
-    autoDealerUnlocked
+    autoDealerUnlocked,
+    cutYieldMult,
+    keepAwake: Math.min(52, keepAwake),
+    startCharge,
+    keepCharge: 0,
+    markSlots,
+    dealerBeatSeconds: BASE_DEALER_BEAT_SECONDS / (1 + dealerSpeed)
   };
 }

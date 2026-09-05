@@ -13,9 +13,13 @@ import type { GameEvent, CardId } from '$engine/types';
 import {
   createInitialState, type GameState, TICK_HZ, step, applyOffline, derive, type Derived,
   homeCard, tableauSpark, winHand, dealHand, serialize, deserialize, exportString, importString,
-  formatNumber, formatRate, visibleUpgrades, upgradeCost, buyUpgrade, maxAffordable, nextMilestone, SAVE_VERSION
+  formatNumber, formatRate, visibleUpgrades, upgradeCost, buyUpgrade, maxAffordable, nextMilestone, SAVE_VERSION,
+  cutPotential, cutsOnCut, canCut, performCut, cutThreshold, runEarned,
+  nodeLevel, nodeCost, canBuyNode, buyNode, visibleNodes
 } from '$engine/index';
 import { MILESTONES, FEEL, type Feel } from '$content/index';
+import { WAYS } from '$content/ways';
+import type { WayId } from '$engine/types';
 import type { Table, TableHost } from '../table/Table';
 import { loadSave, persistSave, requestPersistence, clearSaves } from '../platform/storage';
 import { sound, haptic, unlockAudio } from '../audio/presenters';
@@ -51,6 +55,22 @@ export interface View {
   offline: { seconds: number; earned: string } | null;
   wonBanner: { burst: string } | null;
   lastGesture: string;
+  cut: {
+    revealed: boolean;
+    canCut: boolean;
+    cutsOnCut: string;
+    progress: number; // 0..1 toward the first Cut of this run
+    potential: string;
+    runEarned: string;
+    threshold: string;
+    cuts: string;
+    lifetimeCuts: string;
+    cutsPerformed: number;
+    way: WayId;
+    ways: { id: WayId; name: string; mood: string; blurb: string; mechanics: string; unlocked: boolean }[];
+    cutting: boolean;
+  };
+  constellation: { id: string; name: string; blurb: string; branch: string; level: number; max: number; cost: string; affordable: boolean; effect: string }[];
   gameId: string;
   gameName: string;
   games: { id: string; name: string; blurb: string }[];
@@ -86,6 +106,7 @@ export class GameHost implements TableHost {
   private ledger: Ledger[] = [];
   private offlineNotice: View['offline'] = null;
   private wonBanner: View['wonBanner'] = null;
+  private cutting = false;
   private stopped = false;
 
   constructor() {
@@ -299,7 +320,7 @@ export class GameHost implements TableHost {
   dealerEnabled = true;
   private dealerPending: ReturnType<typeof nextMove> | null = null;
   private dealerTick(dt: number): void {
-    if (!this.derived.autoDealerUnlocked || !this.dealerEnabled) return;
+    if (!this.derived.autoDealerUnlocked || !this.dealerEnabled || this.cutting) return;
     if (this.module.isWon(this.board)) return;
     const idle = (performance.now() - this.lastActivity) / 1000;
     if (idle < this.state.settings.autoDealerDelaySeconds) { this.dealerPending = null; return; }
@@ -333,6 +354,27 @@ export class GameHost implements TableHost {
   private dealerBeat(): number {
     const d = this.derived as Derived & { dealerBeatSeconds?: number };
     return d.dealerBeatSeconds ?? 0.9;
+  }
+
+  // Prestige -----------------------------------------------------------------
+  cut(way: WayId): void {
+    if (this.cutting || !canCut(this.state, this.derived)) return;
+    this.cutting = true;
+    this.wonBanner = null;
+    this.pushView();
+    const finish = () => {
+      const earned = performCut(this.state, this.bus, way, Date.now());
+      this.derived = derive(this.state);
+      this.cutting = false;
+      this.toast(`The deck is cut. ${formatNumber(earned)} ${earned.eq(1) ? 'Cut' : 'Cuts'}.`);
+      this.newHand();
+      void this.save();
+    };
+    if (this.table) this.table.cutCeremony(finish);
+    else finish();
+  }
+  buyNode(id: string): void {
+    if (buyNode(this.state, this.bus, id)) { this.derived = derive(this.state); sound('chime', 0.5); haptic('soft'); this.pushView(); }
   }
 
   // Economy UI -------------------------------------------------------------
@@ -372,6 +414,8 @@ export class GameHost implements TableHost {
         break;
       }
       case 'purchase': this.derived = derive(this.state); break;
+      case 'reveal': if (e.feature === 'cut') { this.toast('The lamp is bright enough to cut the deck.'); this.sound('chime', 0.5); } break;
+      case 'cut': this.ledger.unshift({ id: `cut-${this.state.prestige.cutsPerformed}`, text: `Cut ${this.state.prestige.cutsPerformed}. The deck forgets; the Keeper does not.`, at: Date.now() }); break;
       case 'charge-gained': case 'card-home': this.derived = derive(this.state); break;
       default: break;
     }
@@ -390,6 +434,8 @@ export class GameHost implements TableHost {
       revision: 0, shuffles: '0', lifetime: '0', rate: '0/s', awake: 0, cutsPerformed: 0, handsWon: 0, handsPlayed: 0,
       moves: 0, won: false, stuck: false, canUndo: false, dealerActive: false, dealerUnlocked: false, dealerCountdown: 0,
       nextMilestoneLabel: '', nextMilestoneProgress: 0, journey: 0, ledger: [], toasts: [], upgrades: [], offline: null, wonBanner: null, lastGesture: '',
+      cut: { revealed: false, canCut: false, cutsOnCut: '0', progress: 0, potential: '0', runEarned: '0', threshold: '0', cuts: '0', lifetimeCuts: '0', cutsPerformed: 0, way: 'none', ways: [], cutting: false },
+      constellation: [],
       gameId: 'klondike', gameName: 'Klondike', games: [], gameOptions: [], settings: { sound: true, haptics: true, reducedMotion: false, autoDealerDelaySeconds: 12, shuffleStyle: 'riffle' }
     };
   }
@@ -439,6 +485,25 @@ export class GameHost implements TableHost {
       }),
       offline: this.offlineNotice,
       wonBanner: this.wonBanner,
+      cut: {
+        revealed: s.revealed.includes('cut') || s.prestige.cutsPerformed > 0,
+        canCut: canCut(s, d) && !this.cutting,
+        cutsOnCut: formatNumber(cutsOnCut(s, d)),
+        progress: Math.min(1, cutPotential(s, d).toNumber()),
+        potential: cutPotential(s, d).toFixed(2),
+        runEarned: formatNumber(runEarned(s)),
+        threshold: formatNumber(cutThreshold(s, d)),
+        cuts: formatNumber(s.prestige.cuts),
+        lifetimeCuts: formatNumber(s.prestige.lifetimeCuts),
+        cutsPerformed: s.prestige.cutsPerformed,
+        way: s.run.way,
+        ways: WAYS.map((w) => ({ ...w, unlocked: s.prestige.waysUnlocked.includes(w.id) })),
+        cutting: this.cutting
+      },
+      constellation: visibleNodes(s).map((n) => ({
+        id: n.id, name: n.name, blurb: n.blurb, branch: n.branch, level: nodeLevel(s, n.id), max: n.max,
+        cost: formatNumber(nodeCost(s, n.id)), affordable: canBuyNode(s, n.id), effect: describeNode(n.effect)
+      })),
       lastGesture: this.table ? `${this.table.lastGesture.kind}${this.table.lastGesture.target ? ' → ' + this.table.lastGesture.target : ''} · ${Math.round(this.table.lastGesture.speed)} px/s · held ${Math.round(this.table.lastGesture.held)} ms` : '',
       gameId: this.module.id,
       gameName: this.module.name,
@@ -461,6 +526,22 @@ function describeEffect(e: { kind: string; per?: number; add?: number; suit?: st
     case 'devotionMult': return `grows with cards sent home this run`;
     case 'offlineHours': return `+${e.add ?? 0} h of earning while away`;
     case 'autoDealer': return `someone to play while you rest`;
+    default: return '';
+  }
+}
+function describeNode(e: { kind: string; per?: number; add?: number; way?: string }): string {
+  switch (e.kind) {
+    case 'globalMult': return `+${Math.round((e.per ?? 0) * 100)}% to everything, forever, per level`;
+    case 'keepAwake': return `${e.add ?? 0} more cards stay awake through a cut`;
+    case 'startCharge': return `awake cards begin a run with +${e.add ?? 0} charge`;
+    case 'offlineHours': return `+${e.add ?? 0} h of earning while away`;
+    case 'cutYield': return `+${Math.round((e.per ?? 0) * 100)}% Cuts per cut`;
+    case 'dealerUnlock': return `the dealer is always on staff`;
+    case 'dealerSpeed': return `the dealer plays ${Math.round((e.per ?? 0) * 100)}% faster per level`;
+    case 'burstMult': return `+${Math.round((e.per ?? 0) * 100)}% to the win burst`;
+    case 'sparkMult': return `+${Math.round((e.per ?? 0) * 100)}% to sparks`;
+    case 'wayUnlock': return `opens the Way of the ${e.way === 'gambler' ? 'Gambler' : 'Scholar'}`;
+    case 'markSlots': return `+${e.add ?? 0} Mark slot (Marks arrive with M4)`;
     default: return '';
   }
 }

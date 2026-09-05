@@ -16,6 +16,8 @@ export * from './economy/cards';
 export * from './economy/hand';
 export * from './economy/upgrades';
 export * from './economy/milestones';
+export * from './economy/prestige';
+export * from './economy/constellation';
 
 // Tick and offline.
 export * from './tick';

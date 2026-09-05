@@ -1,0 +1,156 @@
+[
+  {
+    "id": "steady-hand",
+    "name": "Steady Hand",
+    "blurb": "What you learned last time does not leave with the deck.",
+    "branch": "trunk",
+    "cost": "1",
+    "growth": 1.7,
+    "max": 10,
+    "requires": [],
+    "effect": { "kind": "globalMult", "per": 0.25 }
+  },
+  {
+    "id": "kept-flame",
+    "name": "Kept Flame",
+    "blurb": "A few cards stay awake through the cut. The best-charged ones.",
+    "branch": "trunk",
+    "cost": "1",
+    "growth": 2,
+    "max": 6,
+    "requires": [],
+    "effect": { "kind": "keepAwake", "add": 2 }
+  },
+  {
+    "id": "warm-start",
+    "name": "Warm Start",
+    "blurb": "Cards that survive the cut remember some of their practice.",
+    "branch": "trunk",
+    "cost": "2",
+    "growth": 2.2,
+    "max": 5,
+    "requires": ["kept-flame"],
+    "effect": { "kind": "startCharge", "add": 2 }
+  },
+  {
+    "id": "long-night",
+    "name": "Long Night",
+    "blurb": "The lamp keeps its own hours.",
+    "branch": "trunk",
+    "cost": "2",
+    "growth": 2,
+    "max": 4,
+    "requires": [],
+    "effect": { "kind": "offlineHours", "add": 4 }
+  },
+  {
+    "id": "sharper-cut",
+    "name": "Sharper Cut",
+    "blurb": "A cleaner cut yields more from the same deck.",
+    "branch": "trunk",
+    "cost": "2",
+    "growth": 1.6,
+    "max": 10,
+    "requires": [],
+    "effect": { "kind": "cutYield", "per": 0.1 }
+  },
+  {
+    "id": "first-mark",
+    "name": "First Mark",
+    "blurb": "Room to write on a card, and mean it.",
+    "branch": "trunk",
+    "cost": "5",
+    "growth": 3,
+    "max": 3,
+    "requires": ["sharper-cut"],
+    "effect": { "kind": "markSlots", "add": 1 }
+  },
+  {
+    "id": "quick-hands",
+    "name": "Quick Hands",
+    "blurb": "Every move pays a little more attention.",
+    "branch": "hand",
+    "cost": "2",
+    "growth": 1.5,
+    "max": 10,
+    "requires": ["kept-flame"],
+    "effect": { "kind": "sparkMult", "per": 0.5 }
+  },
+  {
+    "id": "last-light",
+    "name": "Last Light",
+    "blurb": "A finished hand keeps its glow a while longer.",
+    "branch": "hand",
+    "cost": "3",
+    "growth": 1.6,
+    "max": 10,
+    "requires": ["quick-hands"],
+    "effect": { "kind": "burstMult", "per": 0.5 }
+  },
+  {
+    "id": "night-shift",
+    "name": "Night Shift",
+    "blurb": "The dealer comes in early now, whatever the run.",
+    "branch": "dealer",
+    "cost": "3",
+    "growth": 1,
+    "max": 1,
+    "requires": ["kept-flame"],
+    "effect": { "kind": "dealerUnlock" }
+  },
+  {
+    "id": "practised-dealer",
+    "name": "Practised Dealer",
+    "blurb": "Fewer pauses between the cards.",
+    "branch": "dealer",
+    "cost": "4",
+    "growth": 1.8,
+    "max": 5,
+    "requires": ["night-shift"],
+    "effect": { "kind": "dealerSpeed", "per": 0.1 }
+  },
+  {
+    "id": "gamblers-way",
+    "name": "The Gambler's Way",
+    "blurb": "A way of playing that trusts the deal. Offered at the next cut.",
+    "branch": "gambler",
+    "cost": "8",
+    "growth": 1,
+    "max": 1,
+    "requires": ["sharper-cut"],
+    "effect": { "kind": "wayUnlock", "way": "gambler" }
+  },
+  {
+    "id": "loaded-deck",
+    "name": "Loaded Deck",
+    "blurb": "The odds were always going to lean somewhere.",
+    "branch": "gambler",
+    "cost": "10",
+    "growth": 2,
+    "max": 5,
+    "requires": ["gamblers-way"],
+    "effect": { "kind": "globalMult", "per": 0.15 }
+  },
+  {
+    "id": "scholars-way",
+    "name": "The Scholar's Way",
+    "blurb": "A way of playing that reads the deal first. Offered at the next cut.",
+    "branch": "scholar",
+    "cost": "8",
+    "growth": 1,
+    "max": 1,
+    "requires": ["sharper-cut"],
+    "effect": { "kind": "wayUnlock", "way": "scholar" }
+  },
+  {
+    "id": "marginalia",
+    "name": "Marginalia",
+    "blurb": "Notes in the margin, kept between decks.",
+    "branch": "scholar",
+    "cost": "10",
+    "growth": 3,
+    "max": 2,
+    "requires": ["scholars-way"],
+    "effect": { "kind": "markSlots", "add": 1 }
+  }
+]

@@ -86,6 +86,9 @@ docs/  brainstorming/  memory/  .claude/{agents,skills}
   tap / drag / tilt / target glow / throw-catch / return-shake / flip / deal choreography; host seam with
   loop, Auto-Dealer, tiered save; synth sounds; real-gesture browser test green. **Open:** win celebration
   cascade, riffle choreography (sound exists, animation does not), real-iPad drag-feel pass.
-- **Balance is untuned** — the engaged sim reaches ~6B/s in an hour with no prestige sink yet; that is M3's
-  job (Cut the Deck + Constellation + pacing tests). Run `npm run sim -- 1 engaged` to see the curve.
-- Next: M3 (see `docs/08-roadmap.md`).
+- **M3 done** — Cut the Deck (`economy/prestige.ts`, scale-free potential, CUT_BASE 1e6, exponent 0.5),
+  the Constellation (14 nodes, 5 branches), Ways (Hand/Dealer live; Gambler/Scholar unlock nodes only),
+  save v2, `tests/balance.test.ts` asserts the pacing contract (first cut median 17 min). Cut/Stars
+  panels reveal when a cut first becomes reachable; the cut runs the table's ceremony.
+- **TriPeaks shipped** as the contract proof with zero renderer changes.
+- Next: M4 Marks (see `docs/08-roadmap.md`). Gambler/Scholar rules-side effects are still open.

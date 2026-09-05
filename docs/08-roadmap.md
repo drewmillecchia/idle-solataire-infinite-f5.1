@@ -24,7 +24,7 @@ non-obvious. Status is kept here and in `CLAUDE.md`.
 - Real-gesture browser test drives pointer events at the canvas and asserts engine state.
 - **Exit:** a full hand can be cleared by gestures alone; win pays exactly `deckRate × 60 × burstMult`.
 
-## M3 — Run economy + first prestige
+## M3 — Run economy + first prestige ✅ (2026-09-05; Gambler/Scholar rules effects deferred to M5)
 - Run upgrades (JSON + Zod): suit mults, charge mults, burst, awake/devotion effects.
 - Cut the Deck + Constellation trunk; Ways of the Hand and the Dealer at the first cut.
 - Headless sim; pacing tests (first cut 12–30 min; ≤ 3 reveals/min 1; no divergence in 24 h).

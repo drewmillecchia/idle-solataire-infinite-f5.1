@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import Decimal from 'break_eternity.js';
-import { createInitialState } from '$engine/state';
+import { createInitialState, SAVE_VERSION } from '$engine/state';
 import { cardId } from '$engine/types';
 import {
   deserialize,
@@ -56,7 +56,7 @@ describe('deserialize defensiveness', () => {
   it('produces a valid state from "{}"', () => {
     const state = deserialize('{}');
     expect(state.cards).toHaveLength(52);
-    expect(state.version).toBe(1);
+    expect(state.version).toBe(SAVE_VERSION);
     expect(state.shuffles.eq(0)).toBe(true);
     expect(state.numbering).toBe('natural');
   });

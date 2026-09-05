@@ -4,25 +4,32 @@
   import Ledger from './panels/Ledger.svelte';
   import Settings from './panels/Settings.svelte';
   import FeelLab from './panels/FeelLab.svelte';
+  import Cut from './panels/Cut.svelte';
+  import Constellation from './panels/Constellation.svelte';
   let { host }: { host: GameHost } = $props();
-  type Tab = 'upgrades' | 'ledger' | 'settings' | 'feel';
+  type Tab = 'upgrades' | 'cut' | 'stars' | 'ledger' | 'settings' | 'feel';
   let tab: Tab = $state('upgrades');
-  const tabs: { id: Tab; label: string }[] = [
-    { id: 'upgrades', label: 'Upgrades' },
-    { id: 'ledger', label: 'Ledger' },
-    { id: 'settings', label: 'Settings' },
-    { id: 'feel', label: 'Feel' }
-  ];
+  const tabs = $derived.by((): { id: Tab; label: string; glow?: boolean }[] => {
+    const t: { id: Tab; label: string; glow?: boolean }[] = [{ id: 'upgrades', label: 'Upgrades' }];
+    if (host.view.cut.revealed) {
+      t.push({ id: 'cut', label: 'Cut', glow: host.view.cut.canCut });
+      t.push({ id: 'stars', label: 'Stars' });
+    }
+    t.push({ id: 'ledger', label: 'Ledger' }, { id: 'settings', label: 'Settings' }, { id: 'feel', label: 'Feel' });
+    return t;
+  });
 </script>
 
 <aside class="rail">
   <nav class="tabs">
     {#each tabs as t (t.id)}
-      <button class:active={tab === t.id} onclick={() => (tab = t.id)}>{t.label}</button>
+      <button class:active={tab === t.id} class:glow={t.glow} onclick={() => (tab = t.id)}>{t.label}</button>
     {/each}
   </nav>
   <div class="panel">
     {#if tab === 'upgrades'}<Upgrades {host} />
+    {:else if tab === 'cut'}<Cut {host} />
+    {:else if tab === 'stars'}<Constellation {host} />
     {:else if tab === 'ledger'}<Ledger {host} />
     {:else if tab === 'settings'}<Settings {host} />
     {:else}<FeelLab {host} />{/if}
@@ -34,5 +41,6 @@
   .tabs { display: flex; border-bottom: 1px solid rgba(201,164,92,0.18); }
   .tabs button { flex: 1; padding: 10px 4px; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--brass-dim); }
   .tabs button.active { color: var(--brass); box-shadow: inset 0 -2px 0 var(--brass); }
+  .tabs button.glow { color: var(--lamp); text-shadow: 0 0 8px rgba(255,217,160,0.6); }
   .panel { flex: 1; overflow-y: auto; padding: 12px; min-height: 0; }
 </style>

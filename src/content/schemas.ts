@@ -96,6 +96,51 @@ export type UpgradeDef = z.infer<typeof UpgradeDefSchema>;
 
 export const UpgradesSchema = z.array(UpgradeDefSchema);
 
+// ---- Constellation (permanent tree, bought with Cuts; docs/02-game-design.md 6) --------------
+
+export const ConstellationEffectSchema = z.discriminatedUnion('kind', [
+  /** Permanent 1 + per*level, folded into `derived.mults.global`. */
+  z.object({ kind: z.literal('globalMult'), per: z.number() }),
+  /** Cards that keep their wake through a Cut (the highest-charge ones). */
+  z.object({ kind: z.literal('keepAwake'), add: z.number().int().min(0) }),
+  /** Charge that surviving awake cards start a run with. */
+  z.object({ kind: z.literal('startCharge'), add: z.number().int().min(0) }),
+  z.object({ kind: z.literal('offlineHours'), add: z.number() }),
+  /** Cuts awarded are multiplied by 1 + per*level. */
+  z.object({ kind: z.literal('cutYield'), per: z.number() }),
+  /** Auto-Dealer available without the run upgrade. */
+  z.object({ kind: z.literal('dealerUnlock') }),
+  /** Dealer beat shortened: beat = base / (1 + per*level). */
+  z.object({ kind: z.literal('dealerSpeed'), per: z.number() }),
+  z.object({ kind: z.literal('burstMult'), per: z.number() }),
+  z.object({ kind: z.literal('sparkMult'), per: z.number() }),
+  /** Adds a Way to `prestige.waysUnlocked` on purchase. */
+  z.object({ kind: z.literal('wayUnlock'), way: z.enum(['gambler', 'scholar']) }),
+  /** Mark slots, stored on `derived.markSlots` for M4. No other effect yet. */
+  z.object({ kind: z.literal('markSlots'), add: z.number().int().min(0) })
+]);
+export type ConstellationEffect = z.infer<typeof ConstellationEffectSchema>;
+
+export const ConstellationBranchSchema = z.enum(['trunk', 'hand', 'dealer', 'gambler', 'scholar']);
+export type ConstellationBranch = z.infer<typeof ConstellationBranchSchema>;
+
+export const ConstellationNodeSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  blurb: z.string().min(1),
+  branch: ConstellationBranchSchema,
+  /** Cost of the first level, in Cuts. Level n costs cost * growth^n. */
+  cost: decimalString,
+  growth: z.number().min(1),
+  max: z.number().int().positive(),
+  /** Node ids that must be owned at level >= 1 before this one is visible or buyable. */
+  requires: z.array(z.string().min(1)),
+  effect: ConstellationEffectSchema
+});
+export type ConstellationNodeDef = z.infer<typeof ConstellationNodeSchema>;
+
+export const ConstellationSchema = z.array(ConstellationNodeSchema);
+
 export const MilestoneDefSchema = z.object({
   id: z.string().min(1),
   value: decimalString,

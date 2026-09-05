@@ -83,6 +83,11 @@ function toDecimal(value: unknown, fallback: Decimal): Decimal {
   return fallback;
 }
 
+function toNumOrNull(value: unknown, fallback: number | null): number | null {
+  if (value === null) return null;
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
 function toStringArray(value: unknown, fallback: string[]): string[] {
   if (!Array.isArray(value)) return fallback;
   return value.filter((v): v is string => typeof v === 'string');
@@ -137,12 +142,22 @@ function repairRun(value: unknown, fallback: RunState): RunState {
   return {
     way,
     startedAt: toNum(value.startedAt, fallback.startedAt),
+    earnedAtStart: toDecimal(value.earnedAtStart, fallback.earnedAtStart),
+    cutAvailableSeenAt: toNumOrNull(value.cutAvailableSeenAt, fallback.cutAvailableSeenAt),
     upgrades: toStringNumberRecord(value.upgrades, {}),
     handsPlayed: Math.max(0, Math.floor(toNum(value.handsPlayed, fallback.handsPlayed))),
     handsWon: Math.max(0, Math.floor(toNum(value.handsWon, fallback.handsWon))),
     homedThisRun: Math.max(0, Math.floor(toNum(value.homedThisRun, fallback.homedThisRun))),
     undosThisHand: Math.max(0, Math.floor(toNum(value.undosThisHand, fallback.undosThisHand)))
   };
+}
+
+function repairWays(value: unknown, fallback: WayId[]): WayId[] {
+  if (!Array.isArray(value)) return fallback;
+  const filtered = value.filter((v): v is WayId =>
+    typeof v === 'string' && (WAY_IDS as readonly string[]).includes(v)
+  );
+  return filtered.length > 0 ? filtered : fallback;
 }
 
 function repairPrestige(value: unknown, fallback: PrestigeState): PrestigeState {
@@ -154,7 +169,8 @@ function repairPrestige(value: unknown, fallback: PrestigeState): PrestigeState 
     permutations: toDecimal(value.permutations, fallback.permutations),
     lifetimePermutations: toDecimal(value.lifetimePermutations, fallback.lifetimePermutations),
     reshuffles: Math.max(0, Math.floor(toNum(value.reshuffles, fallback.reshuffles))),
-    constellation: toStringNumberRecord(value.constellation, {})
+    constellation: toStringNumberRecord(value.constellation, {}),
+    waysUnlocked: repairWays(value.waysUnlocked, fallback.waysUnlocked)
   };
 }
 
@@ -180,7 +196,9 @@ function repairStats(value: unknown, fallback: StatsState): StatsState {
     totalHands: Math.max(0, Math.floor(toNum(value.totalHands, fallback.totalHands))),
     totalWins: Math.max(0, Math.floor(toNum(value.totalWins, fallback.totalWins))),
     bestRate: toDecimal(value.bestRate, fallback.bestRate),
-    playSeconds: Math.max(0, toNum(value.playSeconds, fallback.playSeconds))
+    playSeconds: Math.max(0, toNum(value.playSeconds, fallback.playSeconds)),
+    fastestCutSeconds: toNumOrNull(value.fastestCutSeconds, fallback.fastestCutSeconds),
+    totalCuts: Math.max(0, Math.floor(toNum(value.totalCuts, fallback.totalCuts)))
   };
 }
 

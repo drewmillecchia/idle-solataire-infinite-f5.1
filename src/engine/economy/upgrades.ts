@@ -86,8 +86,11 @@ export function maxAffordable(state: GameState, id: string): number {
 /**
  * Upgrades currently visible: already-revealed ones, plus any whose gate now passes (which are
  * recorded into `state.revealed` so they never hide again).
+ *
+ * Pass `bus` to have first visibility emit `{ type: 'reveal', feature: 'upgrade:<id>' }` — that is
+ * what the "reveals in the first minute" pacing budget counts (docs/02-game-design.md 9).
  */
-export function visibleUpgrades(state: GameState): UpgradeDef[] {
+export function visibleUpgrades(state: GameState, bus?: EventBus): UpgradeDef[] {
   const awakeCount = state.cards.reduce((n, c) => (c.awake ? n + 1 : n), 0);
   const result: UpgradeDef[] = [];
 
@@ -107,6 +110,7 @@ export function visibleUpgrades(state: GameState): UpgradeDef[] {
     }
     if (unlocked) {
       state.revealed.push(def.id);
+      bus?.emit({ type: 'reveal', feature: `upgrade:${def.id}` });
       result.push(def);
     }
   }

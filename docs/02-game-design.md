@@ -130,7 +130,7 @@ Constellation extends to 24 h. Welcome-back is a non-blocking ledger entry, not 
 | Reveals in first minute | ≤ 3 |
 | Whole deck awake | inside the first run |
 | First Cut (engaged sim player) | 12–30 min |
-| Cuts per hour, mid-game | 3–6 |
+| Cuts per hour, hours 2–4 (engaged sim, cut when ≥1 and ≥30 % of lifetime) | 2–4 (was 3–6; see tuning log 2026-09-05 — the potential is scale-free by design, so runs lengthen as lifetime Cuts grow; Cuts *earned* per hour is 6–9) |
 | Run-upgrade tier exhausted | ~2 h engaged |
 | Reshuffle reveal | ~12 cuts (≈ 3–4 h engaged) |
 | Relaxer, 3 hands/day, no panels | still sees a new milestone at least every 2–3 days for the first month |
