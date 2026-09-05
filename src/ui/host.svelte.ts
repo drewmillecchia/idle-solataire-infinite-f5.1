@@ -13,7 +13,7 @@ import { EventBus } from '$engine/events';
 import type { GameEvent, CardId } from '$engine/types';
 import {
   createInitialState, type GameState, TICK_HZ, step, applyOffline, derive, type Derived,
-  homeCard, tableauSpark, winHand, dealHand, serialize, deserialize, exportString, importString,
+  homeCard, tableauSpark, spark, winHand, dealHand, serialize, deserialize, exportString, importString,
   formatNumber, formatRate, visibleUpgrades, upgradeCost, buyUpgrade, maxAffordable, nextMilestone, SAVE_VERSION,
   cutPotential, cutsOnCut, canCut, performCut, cutThreshold, runEarned,
   nodeLevel, nodeCost, canBuyNode, buyNode, visibleNodes,
@@ -61,6 +61,7 @@ export interface View {
   wonBanner: { burst: string } | null;
   lastGesture: string;
   storageWarning: boolean;
+  firstRun: boolean;
   cloud: { enabled: boolean; status: string };
   scholarThinking: boolean;
   cut: {
@@ -245,6 +246,14 @@ export class GameHost implements TableHost {
     this.snapTimer += dt;
     if (this.snapTimer > 0.1) { this.snapTimer = 0; this.pushView(); }
     this.dealerTick(dt);
+    if (this.riffleOn) {
+      this.riffleAcc += dt;
+      if (this.riffleAcc >= 0.25) {
+        const amount = this.derived.deckRate.times(this.riffleAcc).times(0.1);
+        this.riffleAcc = 0;
+        if (amount.gt(0)) spark(this.state, this.bus, amount);
+      }
+    }
     this.raf = requestAnimationFrame(this.frame);
   };
 
@@ -507,6 +516,16 @@ export class GameHost implements TableHost {
     if (!wasReady && isAudioReady()) setMasterVolume(this.state.settings.volume);
   }
   sound(name: string, velocity: number): void { if (this.state.settings.sound) sound(name, velocity); }
+  /**
+   * The Idle Riffle toy: while the deck is being riffled it pays a trickle proportional to what the
+   * deck already earns, so it is meditative rather than a way to farm a deck that is still asleep.
+   */
+  riffling(on: boolean): void {
+    this.riffleOn = on;
+    if (!on) this.pushView();
+  }
+  private riffleOn = false;
+  private riffleAcc = 0;
   haptic(name: string): void { if (this.state.settings.haptics) haptic(name); }
   generator(id: CardId): { awake: boolean; charge: number; glyph?: string | undefined } {
     const c = this.state.cards[id];
@@ -677,6 +696,8 @@ export class GameHost implements TableHost {
   feelJson(): string { return JSON.stringify($state.snapshot(this.feel), null, 2); }
 
   dismissOffline(): void { this.offlineNotice = null; this.pushView(); }
+  private firstRunDismissed = false;
+  dismissFirstRun(): void { this.firstRunDismissed = true; this.pushView(); }
 
   // Events → presenters ------------------------------------------------------
   private onEvent(e: GameEvent): void {
@@ -719,7 +740,7 @@ export class GameHost implements TableHost {
     return {
       revision: 0, shuffles: '0', lifetime: '0', rate: '0/s', awake: 0, cutsPerformed: 0, handsWon: 0, handsPlayed: 0,
       moves: 0, won: false, stuck: false, canUndo: false, dealerActive: false, dealerUnlocked: false, dealerCountdown: 0,
-      nextMilestoneLabel: '', nextMilestoneProgress: 0, journey: 0, ledger: [], toasts: [], upgrades: [], offline: null, wonBanner: null, lastGesture: '', storageWarning: false, cloud: { enabled: false, status: 'off' }, scholarThinking: false,
+      nextMilestoneLabel: '', nextMilestoneProgress: 0, journey: 0, ledger: [], toasts: [], upgrades: [], offline: null, wonBanner: null, lastGesture: '', storageWarning: false, firstRun: false, cloud: { enabled: false, status: 'off' }, scholarThinking: false,
       cut: { revealed: false, canCut: false, cutsOnCut: '0', progress: 0, potential: '0', runEarned: '0', threshold: '0', cuts: '0', lifetimeCuts: '0', cutsPerformed: 0, way: 'none', ways: [], cutting: false },
       constellation: [],
       reshuffle: { revealed: false, can: false, onReshuffle: '0', progress: 0, cycleCuts: '0', threshold: '0', permutations: '0', lifetimePermutations: '0', reshuffles: 0 },
@@ -806,6 +827,8 @@ export class GameHost implements TableHost {
       offline: this.offlineNotice,
       wonBanner: this.wonBanner,
       storageWarning: this.storageWarning,
+      // The one thing a new Keeper is told. It goes as soon as the first card comes home.
+      firstRun: !this.firstRunDismissed && s.stats.totalHomed === 0 && s.prestige.cutsPerformed === 0,
       cloud: { enabled: s.settings.cloud, status: this.cloudStatus },
       scholarThinking: this.scholarPending !== null,
       cut: {

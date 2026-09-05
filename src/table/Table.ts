@@ -31,6 +31,8 @@ export interface TableHost {
   tapSlot(pile: string): void;
   /** Any pointer activity (resets the Auto-Dealer's patience). */
   activity(): void;
+  /** Hold-the-deck riffling started or stopped. The host pays a trickle while it runs. */
+  riffling(on: boolean): void;
   /** Feedback hooks for presenters. velocity 0..1. */
   sound(name: string, velocity: number): void;
   haptic(name: string): void;
@@ -217,6 +219,7 @@ export class Table {
     }
     if (opts.instant || opts.deal) this.cancelChoreography();
     this.disarm();
+    if (this.idle) this.stopIdleRiffle();
     if (opts.deal && opts.shuffle && opts.shuffle !== 'none') {
       // Choreograph: gather → shuffle → then the normal deal. The deal is scheduled after the shuffle.
       this.shuffleChoreography(view, opts.shuffle);
@@ -620,11 +623,71 @@ export class Table {
   private hintTarget: string | null = null;
   /** A tapped card with several legal targets and no obvious one: glow them and wait for a second tap. */
   private armed: { pile: string; index: number; targets: string[]; sprites: CardSprite[] } | null = null;
+  /** Hold the deck and it riffles until you let go (docs/05-feel.md, "Idle Riffle"). */
+  private idle: { sprites: CardSprite[]; phase: number; cycle: number; home: { x: number; y: number }[] } | null = null;
+  private holdTimer: ReturnType<typeof setTimeout> | null = null;
   private disarm(): void {
     if (!this.armed) return;
     this.setTargetGlow(this.armed.targets, 0);
     this.armed.sprites.forEach((s) => { s.lift.target = 0; s.scaleS.target = 1; });
     this.armed = null;
+  }
+
+  private cancelHold(): void {
+    if (this.holdTimer !== null) { clearTimeout(this.holdTimer); this.holdTimer = null; }
+  }
+
+  /**
+   * Hold the deck: the stock riffles on a loop, purely cosmetically — the board is untouched, so it
+   * can run over any position. The host pays a trickle while it does.
+   */
+  private startIdleRiffle(): void {
+    this.holdTimer = null;
+    if (this.idle || !this.layout || !this.view) return;
+    const stock = this.view.piles.find((p) => p.id === 'stock');
+    const pl = this.layout.piles.get('stock');
+    if (!stock || !pl || stock.cards.length < 4) return;
+    const sprites = stock.cards.map((c) => (c.id === null ? null : this.sprites.get(c.id))).filter((x): x is CardSprite => !!x);
+    if (sprites.length < 4) return;
+    this.idle = { sprites, phase: 0, cycle: 0, home: sprites.map((sp) => ({ x: sp.pos.x.target, y: sp.pos.y.target })) };
+    this.host.riffling(true);
+    this.host.haptic('soft');
+  }
+
+  private stopIdleRiffle(): void {
+    const idle = this.idle;
+    if (!idle) return;
+    this.idle = null;
+    idle.sprites.forEach((sp, i) => {
+      const h = idle.home[i]!;
+      sp.pos.configure(this.r(this.feel.placeResponse), this.feel.placeDamping);
+      sp.pos.setTarget(h.x, h.y);
+      sp.rot.target = 0;
+    });
+    this.host.sound('square', 0.5);
+    this.host.riffling(false);
+  }
+
+  private stepIdleRiffle(dt: number): void {
+    const idle = this.idle;
+    if (!idle || !this.layout) return;
+    const period = this.feel.riffleDurationMs / 1000;
+    const before = idle.phase;
+    idle.phase = (idle.phase + dt / period) % 1;
+    if (idle.phase < before) { idle.cycle++; this.host.sound('riffle', 0.45); this.host.haptic('tick'); }
+    const split = this.layout.cardW * 0.5;
+    const cx = idle.home[0]?.x ?? 0;
+    const cy = idle.home[0]?.y ?? 0;
+    // First half of the cycle the packets part; second half they interleave back together.
+    const apart = idle.phase < 0.5 ? idle.phase / 0.5 : 1 - (idle.phase - 0.5) / 0.5;
+    idle.sprites.forEach((sp, i) => {
+      const left = i % 2 === 0;
+      const stagger = (i / idle.sprites.length) * 0.35;
+      const a = Math.max(0, Math.min(1, apart - stagger + 0.35));
+      sp.pos.configure(this.r(0.09), 0.9);
+      sp.pos.setTarget(cx + (left ? -split : split) * a, cy + (left ? 3 : -3) * a);
+      sp.rot.target = (left ? -0.07 : 0.07) * a;
+    });
   }
 
   /** A tap during a shuffle or deal finishes it immediately (docs/05-feel.md: the deal is skippable). */
@@ -642,6 +705,7 @@ export class Table {
   private onDown = (e: FederatedPointerEvent): void => {
     this.host.activity();
     this.clearHint();
+    this.cancelHold();
     if (this.timers.length > 0 && !this.celebration) { this.skipChoreography(); return; }
     if (this.drag || this.throwing) return;
     const sp = this.spriteAt(e);
@@ -679,6 +743,9 @@ export class Table {
       pointerId: e.pointerId
     };
     this.dragLastEventAt = performance.now();
+    if (sp.pile === 'stock' && !pickable) {
+      this.holdTimer = setTimeout(() => this.startIdleRiffle(), this.feel.longPressMs);
+    }
     if (pickable) {
       run.forEach((s, i) => {
         s.lift.target = 1;
@@ -704,7 +771,7 @@ export class Table {
     const d = this.drag;
     if (!d || e.pointerId !== d.pointerId) return;
     const { x, y } = e.global;
-    if (!d.moved && Math.hypot(x - d.startX, y - d.startY) > this.feel.dragThresholdPx) { d.moved = true; this.disarm(); }
+    if (!d.moved && Math.hypot(x - d.startX, y - d.startY) > this.feel.dragThresholdPx) { d.moved = true; this.disarm(); this.cancelHold(); }
     if (!d.moved) return;
     if (!d.sprites[0]?.pickable) return; // face-down or otherwise immovable: no drag at all
     const now = stamp(e);
@@ -754,6 +821,8 @@ export class Table {
 
   /** Drop a drag without a move (cancelled pointer, or the watchdog): sprites return home. */
   private abortDrag(pointerId?: number): void {
+    this.cancelHold();
+    if (this.idle) this.stopIdleRiffle();
     const d = this.drag;
     if (!d || (pointerId !== undefined && d.pointerId !== pointerId)) return;
     this.drag = null;
@@ -772,6 +841,8 @@ export class Table {
     const { x, y } = e.global;
     const held = stamp(e) - d.downAt;
     const first = d.sprites[0];
+    this.cancelHold();
+    if (this.idle) { this.stopIdleRiffle(); return; } // the hold was the gesture
     if (!first) return;
 
     const v0 = this.releaseVelocity(d.samples);
@@ -921,6 +992,7 @@ export class Table {
       }
     }
     this.stepCelebration(dt);
+    this.stepIdleRiffle(dt);
     // Watchdog: a drag with no pointer events for 3 s has lost its pointer.
     if (this.drag && this.drag.moved && performance.now() - this.dragLastEventAt > 3000) this.abortDrag();
     // Lamp breathes (very slowly).

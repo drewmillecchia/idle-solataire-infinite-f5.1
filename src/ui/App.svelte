@@ -44,6 +44,13 @@
     {#if host.view.storageWarning}
       <div class="offline warn"><p>This browser is not keeping the save. Export it from Settings to be safe.</p></div>
     {/if}
+    {#if host.view.firstRun}
+      <button class="note" onclick={() => host.dismissFirstRun()} aria-label="Dismiss the Keeper's note">
+        <p class="note-body">Play a card home and it wakes.</p>
+        <p class="note-body">A woken card counts arrangements for you from then on, awake or not.</p>
+        <p class="note-sign">There are fifty-two. — K.</p>
+      </button>
+    {/if}
     {#if host.view.wonBanner}
       <div class="won">
         <p class="won-title">Hand won.</p>
@@ -112,6 +119,19 @@
   }
   .offline p { margin: 0; }
   .warn { top: auto; bottom: 14px; background: var(--rouge); color: var(--paper); }
+  .note {
+    position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%) rotate(-0.6deg);
+    background: var(--paper); color: var(--ink); padding: 14px 20px; border-radius: 3px;
+    box-shadow: var(--shadow); max-width: 420px; text-align: left; cursor: pointer;
+    font-family: var(--font-serif); border-left: 3px solid var(--brass);
+    animation: settle 0.6s cubic-bezier(0.2, 0.9, 0.3, 1);
+  }
+  .note-body { margin: 0 0 6px; font-size: 15px; line-height: 1.45; }
+  .note-sign { margin: 8px 0 0; font-size: 13px; color: var(--ink-soft); font-style: italic; }
+  @keyframes settle {
+    from { opacity: 0; transform: translateX(-50%) rotate(-3deg) translateY(18px); }
+    to { opacity: 1; transform: translateX(-50%) rotate(-0.6deg) translateY(0); }
+  }
   .won {
     position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%);
     background: var(--paper); color: var(--ink); padding: 18px 26px; border-radius: var(--radius);

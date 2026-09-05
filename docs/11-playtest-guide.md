@@ -15,7 +15,10 @@ back. Feel notes go in `memory/tuning-log.md`; bugs go straight into the convers
    it *arms* (lifts, targets glow); tap a target. Tap elsewhere to disarm.
 5. **Stock.** Tap draws. Tap the stock when empty: recycle. In Settings, switch Draw three: the waste fans.
 6. **Wake the first card.** The chime, the brass star, "A card wakes." The Rate readout starts moving.
-7. **New hand.** Watch the riffle. Tap during it to skip. Does the deal speed feel right?
+7. **Hold the deck.** Press and hold the stock for half a second: it riffles until you let go, and
+   pays a trickle proportional to what the deck already earns (so nothing at all until cards are
+   awake). This is the ASMR toy — tell me if the loop is the wrong length or the sound wears thin.
+8. **New hand.** Watch the riffle. Tap during it to skip. Does the deal speed feel right?
    *Tune:* Feel tab → Flip & deal (`dealIntervalMs`), Settings → Shuffle style.
 
 ## The first hour
@@ -45,6 +48,15 @@ back. Feel notes go in `memory/tuning-log.md`; bugs go straight into the convers
 | Delight | Anything that made you smile; we protect those |
 | Bugs | What you did, what happened, what you expected; a screenshot if visual |
 
+## Also worth a look now
+- **The window** in the top bar grows stars as the odometer climbs, joins them into constellations at
+  intervals, and raises a moon near 52!.
+- **Sound**: Settings has a volume slider and a row of test buttons for every sound. Card sounds are
+  three layers (paper, edge click, felt thud) and shift pitch per card.
+- **Keyboard and screen reader**: press Tab on load for a skip link into an off-canvas set of move
+  controls; `n` new hand, `u` undo, `d` draw, `?` shortcuts.
+- **Golf and Pyramid** in Settings → Game.
+
 ## Known gaps (do not report)
-Scholar Way has no solver yet; Gambler Marks do not fizzle; no cloud save yet; no sound design beyond
-the synth pass; Golf and Pyramid have had no feel pass.
+No sound *samples* yet (everything is synthesised); no Ascension; Golf and Pyramid have had no feel
+pass on glass; the DynamoDB store is a stub.
