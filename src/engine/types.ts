@@ -48,8 +48,10 @@ export type WayId = 'none' | 'hand' | 'dealer' | 'gambler' | 'scholar';
 /** Events the logic emits. Presenters (table FX, sound, haptics, toasts) subscribe. */
 export type GameEvent =
   | { type: 'card-home'; card: CardId; first: boolean; pile: string }
-  | { type: 'card-woken'; card: CardId }
-  | { type: 'charge-gained'; card: CardId; charge: number; source: 'home' | 'mark' | 'way' }
+  /** A tableau move (not home). The host emits it; the Heavy mark listens. */
+  | { type: 'card-moved'; card: CardId; from: string; to: string; depth?: number }
+  | { type: 'card-woken'; card: CardId; depth?: number }
+  | { type: 'charge-gained'; card: CardId; charge: number; source: 'home' | 'mark' | 'way'; depth?: number }
   | { type: 'spark'; amount: Decimal; anchor?: CardId }
   | { type: 'hand-won'; burst: Decimal; game: string; moves: number; seconds: number }
   | { type: 'hand-dealt'; game: string; seed: number }

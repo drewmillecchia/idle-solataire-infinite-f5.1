@@ -8,7 +8,17 @@
 // resolve a Node built-in for the browser bundle.
 import Decimal from 'break_eternity.js';
 import { createInitialState, SAVE_VERSION } from '../state';
-import type { GameState, PrestigeState, RunState, SettingsState, StatsState } from '../state';
+import type {
+  GameState,
+  HandState,
+  MarksState,
+  PlacedMark,
+  PrestigeState,
+  RunState,
+  SettingsState,
+  StatsState
+} from '../state';
+import { markDef, syncMarkCache } from '../marks/placement';
 import { NUMBERING_ORDER } from '../numbering';
 import type { CardState, NumberingId, WayId } from '../types';
 import { migrate } from './migrate';
@@ -134,6 +144,47 @@ function repairNumberingList(value: unknown, fallback: NumberingId[]): Numbering
   return filtered.length > 0 ? filtered : fallback;
 }
 
+/** Per-hand Mark scratch. Ranks outside 1..13 and non-integer card ids are dropped. */
+function repairHand(value: unknown, fallback: HandState): HandState {
+  if (!isRecord(value)) return { echoRanks: [...fallback.echoRanks], homedThisHand: [...fallback.homedThisHand] };
+  const ranks = Array.isArray(value.echoRanks) ? value.echoRanks : [];
+  const homed = Array.isArray(value.homedThisHand) ? value.homedThisHand : [];
+  return {
+    echoRanks: ranks.filter((r): r is number => typeof r === 'number' && Number.isInteger(r) && r >= 1 && r <= 13),
+    homedThisHand: homed.filter((c): c is number => typeof c === 'number' && Number.isInteger(c) && c >= 0 && c < 52)
+  };
+}
+
+/**
+ * Placed marks, the source of truth for the whole Mark system, so this is the strictest repair in
+ * the file: an unknown mark id, the wrong number of cards for its arity, a card id off the deck, a
+ * repeated card inside a Twin, or a card already carrying a mark it cannot share with (a card holds
+ * one mark, plus at most one Twin) all drop the placement rather than the save (invariant #10).
+ */
+function repairMarks(value: unknown): MarksState {
+  if (!isRecord(value)) return { placed: [] };
+  const raw = Array.isArray(value.placed) ? value.placed : [];
+  const out: PlacedMark[] = [];
+  const takenTwin = new Set<number>();
+  const takenOther = new Set<number>();
+  for (const entry of raw) {
+    if (!isRecord(entry)) continue;
+    const def = typeof entry.mark === 'string' ? markDef(entry.mark) : undefined;
+    if (!def) continue;
+    const cardsRaw = Array.isArray(entry.cards) ? entry.cards : [];
+    const cards = cardsRaw.filter(
+      (c): c is number => typeof c === 'number' && Number.isInteger(c) && c >= 0 && c < 52
+    );
+    if (cards.length !== def.arity) continue;
+    if (new Set(cards).size !== cards.length) continue;
+    const bucket = def.id === 'twin' ? takenTwin : takenOther;
+    if (cards.some((c) => bucket.has(c))) continue;
+    for (const c of cards) bucket.add(c);
+    out.push({ mark: def.id, cards });
+  }
+  return { placed: out };
+}
+
 function repairRun(value: unknown, fallback: RunState): RunState {
   if (!isRecord(value)) return fallback;
   const way = typeof value.way === 'string' && (WAY_IDS as readonly string[]).includes(value.way)
@@ -148,7 +199,8 @@ function repairRun(value: unknown, fallback: RunState): RunState {
     handsPlayed: Math.max(0, Math.floor(toNum(value.handsPlayed, fallback.handsPlayed))),
     handsWon: Math.max(0, Math.floor(toNum(value.handsWon, fallback.handsWon))),
     homedThisRun: Math.max(0, Math.floor(toNum(value.homedThisRun, fallback.homedThisRun))),
-    undosThisHand: Math.max(0, Math.floor(toNum(value.undosThisHand, fallback.undosThisHand)))
+    undosThisHand: Math.max(0, Math.floor(toNum(value.undosThisHand, fallback.undosThisHand))),
+    hand: repairHand(value.hand, fallback.hand)
   };
 }
 
@@ -218,7 +270,7 @@ function repairGameConfig(value: unknown): Record<string, Record<string, string>
 
 function repair(raw: RawSave, now: number): GameState {
   const initial = createInitialState(now);
-  return {
+  const state: GameState = {
     version: SAVE_VERSION,
     createdAt: toNum(raw.createdAt, initial.createdAt),
     lastSeenAt: toNum(raw.lastSeenAt, now),
@@ -229,6 +281,7 @@ function repair(raw: RawSave, now: number): GameState {
     unlockedNumberings: repairNumberingList(raw.unlockedNumberings, initial.unlockedNumberings),
     run: repairRun(raw.run, initial.run),
     prestige: repairPrestige(raw.prestige, initial.prestige),
+    marks: repairMarks(raw.marks),
     revealed: toStringArray(raw.revealed, []),
     milestones: toStringArray(raw.milestones, []),
     settings: repairSettings(raw.settings, initial.settings),
@@ -236,6 +289,9 @@ function repair(raw: RawSave, now: number): GameState {
     activeGame: toStr(raw.activeGame, initial.activeGame),
     gameConfig: repairGameConfig(raw.gameConfig)
   };
+  // `cards[i].marks` is a cache: rebuild it from the placements rather than trusting the file.
+  syncMarkCache(state);
+  return state;
 }
 
 /** Parses and repairs a save. Never throws: bad input becomes a fresh initial state. */

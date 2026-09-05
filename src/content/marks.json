@@ -1,0 +1,102 @@
+[
+  {
+    "id": "echo",
+    "name": "Echo",
+    "glyph": "∿",
+    "blurb": "A rank, remembered until it comes round again.",
+    "rule": "When this card comes home, the next card of the same rank to come home this hand pays double spark and gains a charge.",
+    "arity": 1,
+    "kind": "trigger",
+    "unlockAtLifetimeCuts": 1
+  },
+  {
+    "id": "lantern",
+    "name": "Lantern",
+    "glyph": "☼",
+    "blurb": "One card lit, and the whole suit reads easier.",
+    "rule": "While this card is awake, every card of its suit earns one and a half times as much.",
+    "arity": 1,
+    "kind": "passive",
+    "unlockAtLifetimeCuts": 1
+  },
+  {
+    "id": "kindling",
+    "name": "Kindling",
+    "glyph": "✶",
+    "blurb": "Charge travels to the cards either side of it.",
+    "rule": "When this card gains a charge, its rank-neighbours in the same suit each gain a charge.",
+    "arity": 1,
+    "kind": "trigger",
+    "unlockAtLifetimeCuts": 3
+  },
+  {
+    "id": "twin",
+    "name": "Twin",
+    "glyph": "∞",
+    "blurb": "Two cards, one fate. The wire the rest hang from.",
+    "rule": "When either twin wakes or gains a charge, the other wakes if it is asleep and otherwise gains a charge.",
+    "arity": 2,
+    "kind": "trigger",
+    "unlockAtLifetimeCuts": 3
+  },
+  {
+    "id": "anchor",
+    "name": "Anchor",
+    "glyph": "⚓",
+    "blurb": "Something to hold on to when the deck is cut.",
+    "rule": "This card keeps its wake and its charge through Cut the Deck.",
+    "arity": 1,
+    "kind": "passive",
+    "unlockAtLifetimeCuts": 6
+  },
+  {
+    "id": "wild",
+    "name": "Wild",
+    "glyph": "✱",
+    "blurb": "It fits wherever you put it, and asks no questions.",
+    "rule": "In the tableau this card may be placed on any card.",
+    "arity": 1,
+    "kind": "twist",
+    "unlockAtLifetimeCuts": 6
+  },
+  {
+    "id": "mirror",
+    "name": "Mirror",
+    "glyph": "◐",
+    "blurb": "Red on one side, black on the other, both at once.",
+    "rule": "This card counts as both colours.",
+    "arity": 1,
+    "kind": "twist",
+    "unlockAtLifetimeCuts": 10
+  },
+  {
+    "id": "glass",
+    "name": "Glass",
+    "glyph": "◇",
+    "blurb": "You can see it coming, which is most of the game.",
+    "rule": "This card is dealt face-up even where the game deals face-down.",
+    "arity": 1,
+    "kind": "twist",
+    "unlockAtLifetimeCuts": 10
+  },
+  {
+    "id": "heavy",
+    "name": "Heavy",
+    "glyph": "▼",
+    "blurb": "It lands hard enough to count, wherever it lands.",
+    "rule": "Moving this card in the tableau gains it a charge, though it never wakes it.",
+    "arity": 1,
+    "kind": "trigger",
+    "unlockAtLifetimeCuts": 15
+  },
+  {
+    "id": "tithe",
+    "name": "Tithe",
+    "glyph": "♆",
+    "blurb": "It gives up its own earnings to the rest of the suit.",
+    "rule": "This card earns nothing, and every other card of its suit earns a quarter more.",
+    "arity": 1,
+    "kind": "passive",
+    "unlockAtLifetimeCuts": 15
+  }
+]

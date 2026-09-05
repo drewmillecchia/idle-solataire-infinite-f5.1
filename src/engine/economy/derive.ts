@@ -9,6 +9,7 @@ import { rankValue } from '../numbering';
 import { cardDef } from '../types';
 import type { Suit } from '../types';
 import type { GameState } from '../state';
+import { cardsWithMark, markSlotsFrom } from '../marks/placement';
 
 export interface DerivedMults {
   global: Decimal;
@@ -45,8 +46,10 @@ export interface Derived {
    * Reserved: no Constellation node grants it yet (the Anchor mark will, in M4).
    */
   keepCharge: number;
-  /** Mark slots. Stored for M4; nothing reads it yet. */
+  /** Mark slots granted by the Constellation alone. */
   markSlots: number;
+  /** Every mark slot the player has: the first Cut's slot plus the Constellation's. */
+  markSlotsTotal: number;
   /** Seconds between Auto-Dealer moves. */
   dealerBeatSeconds: number;
 }
@@ -172,10 +175,28 @@ export function derive(state: GameState): Derived {
   const permutation = D(1).plus(state.prestige.lifetimePermutations).pow(1.2);
   const way = D(1);
 
+  // Marks that are pure multipliers land in the SAME pass (invariant #2), folded into the suit
+  // multiplier, which is deliberately outside `cutMultiplier`: they are card-side play progress.
+  //   Lantern - while AWAKE, its suit x1.5, stacking multiplicatively.
+  //   Tithe   - its own output is 0 (below) and its suit x1.25 per tithe, awake or not: the card
+  //             gives up its earnings by being marked, so the suit is lifted from the moment the
+  //             mark is placed.
+  for (const id of cardsWithMark(state, 'lantern')) {
+    if (!cardStates[id]?.awake) continue;
+    const s = cardDef(id).suit;
+    suit[s] = suit[s].times(1.5);
+  }
+  const titheCards = new Set(cardsWithMark(state, 'tithe'));
+  for (const id of titheCards) {
+    const s = cardDef(id).suit;
+    suit[s] = suit[s].times(1.25);
+  }
+
   const mults: DerivedMults = { global, suit, awake, devotion, cut, permutation, way };
 
   const perCard: Decimal[] = cardStates.map((card, id) => {
     if (!card.awake) return D(0);
+    if (titheCards.has(id)) return D(0);
     const { suit: cardSuit, rank } = cardDef(id);
     const base = rankValue(state.numbering, rank);
     return base
@@ -207,6 +228,7 @@ export function derive(state: GameState): Derived {
     startCharge,
     keepCharge: 0,
     markSlots,
+    markSlotsTotal: markSlotsFrom(state, markSlots),
     dealerBeatSeconds: BASE_DEALER_BEAT_SECONDS / (1 + dealerSpeed)
   };
 }

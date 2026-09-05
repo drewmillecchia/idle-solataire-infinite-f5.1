@@ -3,7 +3,7 @@
  * 10 Hz view snapshot), the active game, persistence, and presenter wiring.
  */
 import type { GameModule, GameConfig, BoardView } from '$rules/module';
-import { NO_TWISTS } from '$rules/module';
+
 import { GAMES, gameById } from '$rules/registry';
 import type { GameOption } from '$rules/module';
 import { nextMove } from '$rules/autoplay';
@@ -15,9 +15,10 @@ import {
   homeCard, tableauSpark, winHand, dealHand, serialize, deserialize, exportString, importString,
   formatNumber, formatRate, visibleUpgrades, upgradeCost, buyUpgrade, maxAffordable, nextMilestone, SAVE_VERSION,
   cutPotential, cutsOnCut, canCut, performCut, cutThreshold, runEarned,
-  nodeLevel, nodeCost, canBuyNode, buyNode, visibleNodes
+  nodeLevel, nodeCost, canBuyNode, buyNode, visibleNodes,
+  attachMarks, twistsFor, availableMarks, canPlace, placeMark, removeMark, placementFor, markSlots, usedSlots, markDef
 } from '$engine/index';
-import { MILESTONES, FEEL, type Feel } from '$content/index';
+import { MILESTONES, FEEL, MARKS, type Feel } from '$content/index';
 import { WAYS } from '$content/ways';
 import type { WayId } from '$engine/types';
 import type { Table, TableHost } from '../table/Table';
@@ -71,6 +72,14 @@ export interface View {
     cutting: boolean;
   };
   deck: { awake: boolean; charge: number; glyph?: string | undefined; selected: boolean }[];
+  marks: {
+    slots: number;
+    used: number;
+    available: { id: string; name: string; glyph: string; rule: string; arity: number; kind: string; placed: number }[];
+    placed: { id: string; name: string; glyph: string; cards: number[] }[];
+    picking: string | null;
+    canPlace: boolean;
+  };
   constellation: { id: string; name: string; blurb: string; branch: string; level: number; max: number; cost: string; affordable: boolean; effect: string }[];
   gameId: string;
   gameName: string;
@@ -114,9 +123,17 @@ export class GameHost implements TableHost {
     this.state = createInitialState(Date.now());
     this.derived = derive(this.state);
     this.module = (gameById('klondike') ?? GAMES[0]) as GameModule<unknown>;
-    this.board = this.module.deal(mulberry32(1), this.config(), NO_TWISTS);
+    this.board = this.module.deal(mulberry32(1), this.config(), twistsFor(this.state));
     this.bus.on((e) => this.onEvent(e));
+    this.detachMarks = attachMarks(this.state, this.bus);
   }
+  private detachMarks: () => void = () => {};
+  /** The interpreter closes over `state`; re-attach whenever the state object is replaced. */
+  private reattachMarks(): void {
+    this.detachMarks();
+    this.detachMarks = attachMarks(this.state, this.bus);
+  }
+  private twists() { return twistsFor(this.state); }
 
   // ---------------------------------------------------------------- lifecycle
 
@@ -124,6 +141,7 @@ export class GameHost implements TableHost {
     const saved = await loadSave();
     if (saved) {
       this.state = deserialize(saved.json);
+      this.reattachMarks();
       this.derived = derive(this.state);
       const gone = (Date.now() - this.state.lastSeenAt) / 1000;
       if (gone > 60) {
@@ -213,6 +231,7 @@ export class GameHost implements TableHost {
     try {
       const st = importString(s);
       this.state = st;
+      this.reattachMarks();
       this.derived = derive(st);
       this.newHand(true);
       void this.save();
@@ -226,7 +245,7 @@ export class GameHost implements TableHost {
 
   newHand(silent = false): void {
     this.seed = randomSeed();
-    this.board = this.module.deal(mulberry32(this.seed), this.config(), NO_TWISTS);
+    this.board = this.module.deal(mulberry32(this.seed), this.config(), this.twists());
     this.history = [];
     this.handMoves = 0;
     this.handStartedAt = performance.now();
@@ -291,19 +310,23 @@ export class GameHost implements TableHost {
   }
 
   // TableHost --------------------------------------------------------------
-  canPickUp(pile: string, index: number): boolean { return this.module.canPickUp(this.board, pile, index, NO_TWISTS); }
-  legalTargets(pile: string, index: number): string[] { return this.module.legalTargets(this.board, pile, index, NO_TWISTS); }
+  canPickUp(pile: string, index: number): boolean { return this.module.canPickUp(this.board, pile, index, this.twists()); }
+  legalTargets(pile: string, index: number): string[] { return this.module.legalTargets(this.board, pile, index, this.twists()); }
   tryMove(pile: string, index: number, to: string): boolean {
-    return this.apply(this.module.move(this.board, pile, index, to, NO_TWISTS), pile);
+    const moved = this.module.view(this.board).piles.find((p) => p.id === pile)?.cards.slice(index).map((c) => c.id) ?? [];
+    const r = this.module.move(this.board, pile, index, to, this.twists());
+    const changed = this.apply(r, pile);
+    if (changed && r.homed.length === 0) for (const id of moved) if (id !== null) this.bus.emit({ type: 'card-moved', card: id, from: pile, to });
+    return changed;
   }
   tap(pile: string, index: number): void {
-    if (pile === 'stock') { this.apply(this.module.draw(this.board, NO_TWISTS), 'stock'); sound('flip', 0.5); return; }
-    const to = this.module.autoTarget(this.board, pile, index, NO_TWISTS);
+    if (pile === 'stock') { this.apply(this.module.draw(this.board, this.twists()), 'stock'); sound('flip', 0.5); return; }
+    const to = this.module.autoTarget(this.board, pile, index, this.twists());
     if (to) { if (this.tryMove(pile, index, to)) { sound('place', 0.5); haptic('soft'); return; } }
     sound('tick', 0.15);
   }
   tapSlot(pile: string): void {
-    if (pile === 'stock') { this.apply(this.module.draw(this.board, NO_TWISTS), 'stock'); }
+    if (pile === 'stock') { this.apply(this.module.draw(this.board, this.twists()), 'stock'); }
   }
   activity(): void {
     this.lastActivity = performance.now();
@@ -319,11 +342,46 @@ export class GameHost implements TableHost {
   selectedCards: CardId[] = [];
   /** Tap on a card in the deck spread. Selection drives Mark placement (M4). */
   tapDeckCard(id: CardId): void {
-    this.selectedCards = this.selectedCards.includes(id) ? this.selectedCards.filter((x) => x !== id) : [...this.selectedCards, id].slice(-2);
+    const arity = this.pickingMark ? (markDef(this.pickingMark)?.arity ?? 1) : 2;
+    this.selectedCards = this.selectedCards.includes(id) ? this.selectedCards.filter((x) => x !== id) : [...this.selectedCards, id].slice(-arity);
     this.pushView();
   }
-  /** Mark glyph lookup; filled in when the Marks content lands (M4). */
-  glyphFor(_marks: string[]): string | undefined { return undefined; }
+  /** The card's own mark glyph first; a Twin (the wire) is appended as a small second glyph. */
+  glyphFor(marks: string[]): string | undefined {
+    if (marks.length === 0) return undefined;
+    const own = marks.find((m) => m !== 'twin');
+    const g = (id: string | undefined) => (id ? MARKS.find((m) => m.id === id)?.glyph ?? '' : '');
+    const out = g(own) + (marks.includes('twin') ? g('twin') : '');
+    return out || undefined;
+  }
+
+  // Marks ----------------------------------------------------------------------
+  pickingMark: string | null = null;
+  pickMark(id: string | null): void {
+    this.pickingMark = this.pickingMark === id ? null : id;
+    this.selectedCards = [];
+    this.pushView();
+  }
+  placePickedMark(): void {
+    if (!this.pickingMark) return;
+    if (placeMark(this.state, this.bus, this.derived, this.pickingMark, this.selectedCards)) {
+      this.derived = derive(this.state);
+      sound('chime', 0.5); haptic('soft');
+      this.pickingMark = null;
+      this.selectedCards = [];
+      this.table?.setBoard(this.module.view(this.board));
+      this.pushView();
+    }
+  }
+  unplaceMark(id: string, card: number): void {
+    if (removeMark(this.state, id, card)) {
+      this.derived = derive(this.state);
+      sound('slideBack', 0.3);
+      this.table?.setBoard(this.module.view(this.board));
+      this.pushView();
+    }
+  }
+  markOn(card: number): string | undefined { return placementFor(this.state, card)?.mark; }
 
   // Auto-Dealer -----------------------------------------------------------
   dealerEnabled = true;
@@ -343,13 +401,13 @@ export class GameHost implements TableHost {
       this.dealerPending = null;
       this.table?.clearHint();
       this.dealerSeen.add(this.module.hash(this.board));
-      if (mv.kind === 'draw') this.apply(this.module.draw(this.board, NO_TWISTS), 'stock');
+      if (mv.kind === 'draw') this.apply(this.module.draw(this.board, this.twists()), 'stock');
       else this.tryMove(mv.pile, mv.index, mv.to);
       return;
     }
     if (this.dealerTimer < beat * 0.5) return;
     this.dealerTimer = 0;
-    const mv = nextMove(this.module, this.board, NO_TWISTS, this.dealerSeen);
+    const mv = nextMove(this.module, this.board, this.twists(), this.dealerSeen);
     if (!mv) {
       // Nothing new: deal a fresh hand after a pause.
       if (idle > this.state.settings.autoDealerDelaySeconds + 4) this.newHand();
@@ -423,7 +481,11 @@ export class GameHost implements TableHost {
         break;
       }
       case 'purchase': this.derived = derive(this.state); break;
-      case 'reveal': if (e.feature === 'cut') { this.toast('The lamp is bright enough to cut the deck.'); this.sound('chime', 0.5); } break;
+      case 'reveal':
+        if (e.feature === 'cut') { this.toast('The lamp is bright enough to cut the deck.'); this.sound('chime', 0.5); }
+        else if (e.feature.startsWith('mark:')) { const m = markDef(e.feature.slice(5)); if (m) this.toast(`A Mark is yours to place: ${m.name}.`); }
+        break;
+      case 'mark-fired': this.sound('tick', 0.6); this.derived = derive(this.state); break;
       case 'cut': this.ledger.unshift({ id: `cut-${this.state.prestige.cutsPerformed}`, text: `Cut ${this.state.prestige.cutsPerformed}. The deck forgets; the Keeper does not.`, at: Date.now() }); break;
       case 'charge-gained': case 'card-home': this.derived = derive(this.state); break;
       default: break;
@@ -446,6 +508,7 @@ export class GameHost implements TableHost {
       cut: { revealed: false, canCut: false, cutsOnCut: '0', progress: 0, potential: '0', runEarned: '0', threshold: '0', cuts: '0', lifetimeCuts: '0', cutsPerformed: 0, way: 'none', ways: [], cutting: false },
       constellation: [],
       deck: [],
+      marks: { slots: 0, used: 0, available: [], placed: [], picking: null, canPlace: false },
       gameId: 'klondike', gameName: 'Klondike', games: [], gameOptions: [], settings: { sound: true, haptics: true, reducedMotion: false, autoDealerDelaySeconds: 12, shuffleStyle: 'riffle' }
     };
   }
@@ -478,7 +541,7 @@ export class GameHost implements TableHost {
       handsPlayed: s.run.handsPlayed,
       moves: this.handMoves,
       won: this.module.isWon(this.board),
-      stuck: this.module.isStuck(this.board, NO_TWISTS),
+      stuck: this.module.isStuck(this.board, this.twists()),
       canUndo: this.history.length > 0,
       dealerUnlocked: d.autoDealerUnlocked,
       dealerActive: d.autoDealerUnlocked && this.dealerEnabled && idle >= s.settings.autoDealerDelaySeconds,
@@ -511,6 +574,14 @@ export class GameHost implements TableHost {
         cutting: this.cutting
       },
       deck: s.cards.map((c, i) => ({ awake: c.awake, charge: c.charge, glyph: this.glyphFor(c.marks), selected: this.selectedCards.includes(i) })),
+      marks: {
+        slots: markSlots(s, d),
+        used: usedSlots(s),
+        available: availableMarks(s, this.bus).map((m) => ({ id: m.id, name: m.name, glyph: m.glyph, rule: m.rule, arity: m.arity, kind: m.kind, placed: s.marks.placed.filter((p) => p.mark === m.id).length })),
+        placed: s.marks.placed.map((p) => { const m = markDef(p.mark); return { id: p.mark, name: m?.name ?? p.mark, glyph: m?.glyph ?? '?', cards: p.cards }; }),
+        picking: this.pickingMark,
+        canPlace: this.pickingMark !== null && canPlace(s, d, this.pickingMark, this.selectedCards)
+      },
       constellation: visibleNodes(s).map((n) => ({
         id: n.id, name: n.name, blurb: n.blurb, branch: n.branch, level: nodeLevel(s, n.id), max: n.max,
         cost: formatNumber(nodeCost(s, n.id)), affordable: canBuyNode(s, n.id), effect: describeNode(n.effect)

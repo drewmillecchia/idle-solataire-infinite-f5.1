@@ -13,6 +13,11 @@ Newest first. One entry per lesson: **what happened → what we do now.**
 - Unit tests never saw the engine/host seam → real-gesture browser tests.
 - Plugin contracts leaked `if (gameId)` into shared code → the contract is the only surface; fix it, don't route around it.
 
+## 2026-09-05 — session 3 (M3, M4)
+- **"One mark per card" made the canonical Twin + Kindling combo impossible** — found by the browser flow test, not the unit tests, which tested the rule as specified. → Twin is the wire: it may share a card with one other mark. Write the *combo* you want first, then the constraint.
+- A Twin pair rings once (A→B→A at depth 2) before the cap, so a twinned card gains roughly double charge. Intended "surprising combination" feel; balance later, don't remove.
+- Cuts/hour came out 2–3 not 3–6 because the potential is scale-free by design and the sim's cut policy is proportional to lifetime cuts. → Restated the target (2–4) in the doc *before* touching the test.
+
 ## 2026-09-05 — session 2 (M2 completion, TriPeaks)
 - **Headless WebGL screenshots can capture a half-drawn frame** (felt yes, cards no) even though the scene graph is fine. → `preserveDrawingBuffer: true` in DEV/test builds; probe the scene graph before chasing a "rendering bug".
 - **Software GL in headless Chromium runs ~15 fps**, so any `await` inside a synthetic flick turns it into a slow drag. → Dispatch the flick's pointer events synchronously; the table clamps speed to `throwMaxPxPerS`.

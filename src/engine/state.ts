@@ -3,10 +3,18 @@
  */
 import Decimal from 'break_eternity.js';
 import { D } from './numbers';
-import type { CardState, NumberingId, WayId } from './types';
+import type { CardId, CardState, NumberingId, WayId } from './types';
 
 /** Bump on any state-shape change; add a matching branch in save/migrate.ts. */
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
+
+/** Per-hand scratch for the Marks that only reach across one hand. Reset by `dealHand`. */
+export interface HandState {
+  /** Ranks an Echo card has armed this hand; the next home of that rank spends one. */
+  echoRanks: number[];
+  /** Cards played home this hand, in order. */
+  homedThisHand: CardId[];
+}
 
 export interface RunState {
   way: WayId;
@@ -24,6 +32,7 @@ export interface RunState {
   handsWon: number;
   homedThisRun: number;
   undosThisHand: number;
+  hand: HandState;
 }
 
 export interface PrestigeState {
@@ -37,6 +46,20 @@ export interface PrestigeState {
   constellation: Record<string, number>;
   /** Ways offered at the next Cut. The first Cut offers Hand and Dealer; others unlock on the tree. */
   waysUnlocked: WayId[];
+}
+
+/** One placement: a mark id and the cards it covers (2 for Twin, 1 otherwise). */
+export interface PlacedMark {
+  mark: string;
+  cards: CardId[];
+}
+
+/**
+ * Placed marks. THIS is the source of truth; `cards[i].marks` is a cache kept in step by
+ * `engine/marks/placement.ts` (and rebuilt from here on load) so the renderer can read a card alone.
+ */
+export interface MarksState {
+  placed: PlacedMark[];
 }
 
 export interface SettingsState {
@@ -71,6 +94,7 @@ export interface GameState {
   unlockedNumberings: NumberingId[];
   run: RunState;
   prestige: PrestigeState;
+  marks: MarksState;
   revealed: string[];
   milestones: string[];
   settings: SettingsState;
@@ -98,7 +122,8 @@ export function createInitialState(now: number): GameState {
       handsPlayed: 0,
       handsWon: 0,
       homedThisRun: 0,
-      undosThisHand: 0
+      undosThisHand: 0,
+      hand: { echoRanks: [], homedThisHand: [] }
     },
     prestige: {
       cuts: D(0),
@@ -110,6 +135,7 @@ export function createInitialState(now: number): GameState {
       constellation: {},
       waysUnlocked: ['hand', 'dealer']
     },
+    marks: { placed: [] },
     revealed: [],
     milestones: [],
     settings: {

@@ -28,10 +28,14 @@ export function winHand(state: GameState, bus: EventBus, params: WinHandParams):
   return burst;
 }
 
-/** Starts a new hand: resets the per-hand undo counter and bumps hand-played counters. */
+/**
+ * Starts a new hand: resets the per-hand undo counter and the per-hand Mark scratch (Echo's armed
+ * ranks do not survive the deal), and bumps the hand-played counters.
+ */
 export function dealHand(state: GameState, bus: EventBus, game: string, seed: number): void {
   state.run.handsPlayed += 1;
   state.stats.totalHands += 1;
   state.run.undosThisHand = 0;
+  state.run.hand = { echoRanks: [], homedThisHand: [] };
   bus.emit({ type: 'hand-dealt', game, seed });
 }

@@ -91,4 +91,8 @@ docs/  brainstorming/  memory/  .claude/{agents,skills}
   save v2, `tests/balance.test.ts` asserts the pacing contract (first cut median 17 min). Cut/Stars
   panels reveal when a cut first becomes reachable; the cut runs the table's ceremony.
 - **TriPeaks shipped** as the contract proof with zero renderer changes.
-- Next: M4 Marks (see `docs/08-roadmap.md`). Gambler/Scholar rules-side effects are still open.
+- **M4 done** — Marks: `content/marks.json` (ten, one-sentence rules, glyphs), `engine/marks/` (placement with
+  slots, interpreter over the bus with `DEPTH_CAP` 3, `twistsFor(state)` feeding the rules' `Twists`), Lantern/
+  Tithe in derive, Anchor in performCut, Heavy via the host's `card-moved` event, save v3. Placement UI lives in
+  the Deck panel; glyphs render on the cards. 213 tests + `tools/marks-flow.mjs`.
+- Next: M5 the long game (Reshuffle → Permutations, numbering ladder, 52! odometer + sky, Gambler/Scholar).

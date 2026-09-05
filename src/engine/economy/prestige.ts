@@ -44,6 +44,7 @@ import type { Derived } from './derive';
 import type { EventBus } from '../events';
 import type { GameState } from '../state';
 import type { WayId } from '../types';
+import { cardsWithMark } from '../marks/placement';
 
 /** Shuffles a run must earn, per point of current multiplier, to be worth exactly one Cut. */
 export const CUT_BASE = '1e6';
@@ -132,11 +133,17 @@ export function performCut(state: GameState, bus: EventBus, way: WayId, now: num
   const best = state.stats.fastestCutSeconds;
   state.stats.fastestCutSeconds = best === null ? runSeconds : Math.min(best, runSeconds);
 
-  // Cards: everything sleeps except the best-charged `keepAwake` of them.
+  // Cards: everything sleeps except the best-charged `keepAwake` of them, plus every Anchored card,
+  // which keeps its wake AND its full charge — that is the whole of the Anchor mark.
+  const anchored = new Set(cardsWithMark(state, 'anchor'));
   const kept = topByCharge(state, derived.keepAwake);
   for (let id = 0; id < state.cards.length; id++) {
     const card = state.cards[id];
     if (!card) continue;
+    if (anchored.has(id)) {
+      // Untouched: awake stays awake, asleep stays asleep, charge is kept exactly.
+      continue;
+    }
     if (kept.has(id)) {
       card.awake = true;
       card.charge = Math.max(Math.floor(card.charge * derived.keepCharge), derived.startCharge);
@@ -157,7 +164,8 @@ export function performCut(state: GameState, bus: EventBus, way: WayId, now: num
     handsPlayed: 0,
     handsWon: 0,
     homedThisRun: 0,
-    undosThisHand: 0
+    undosThisHand: 0,
+    hand: { echoRanks: [], homedThisHand: [] }
   };
 
   bus.emit({ type: 'cut', cuts: earned, way: chosen });

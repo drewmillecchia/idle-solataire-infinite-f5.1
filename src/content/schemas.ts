@@ -150,3 +150,24 @@ export const MilestoneDefSchema = z.object({
 export type MilestoneDef = z.infer<typeof MilestoneDefSchema>;
 
 export const MilestonesSchema = z.array(MilestoneDefSchema);
+
+// ---- Marks (placed rules over the event bus; docs/02-game-design.md 4, ADR-006) --------------
+
+/** A Mark is one sentence. `arity` 2 means one placement covers two cards (Twin) in one slot. */
+export const MarkDefSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  /** Exactly one ink-drawable character, stamped on the card face. */
+  glyph: z.string().refine((s) => Array.from(s).length === 1, 'glyph must be one character'),
+  blurb: z.string().min(1),
+  /** The exact mechanic, in one sentence. */
+  rule: z.string().min(1),
+  /** Cards one placement covers. 1 for every mark but Twin. */
+  arity: z.union([z.literal(1), z.literal(2)]),
+  /** `trigger` fires on events, `passive` is read by derive/performCut, `twist` is read by rules. */
+  kind: z.enum(['trigger', 'passive', 'twist']),
+  unlockAtLifetimeCuts: z.number().int().min(0)
+});
+export type MarkDef = z.infer<typeof MarkDefSchema>;
+
+export const MarksSchema = z.array(MarkDefSchema);

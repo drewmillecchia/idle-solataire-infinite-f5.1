@@ -65,6 +65,9 @@ The build system. **Deterministic, placed, limited.** No shop, no draw, no inven
 | **Heavy** | Tableau moves of this card count as a home play for charge (not for waking). | Echo/Kindling engines |
 | **Tithe** | This card's output is 0, but every other card of its suit gets +25%. | Lantern stacking |
 
+Slots: 0 until the first Cut, then 1, plus Constellation nodes (First Mark, Marginalia). Chains stop at depth 3.
+A card carries at most one Mark — except **Twin, which is the wire**: a Twin may share a card with one other Mark, so Twin + Kindling on the same card is the canonical first combo.
+
 Design rules for Marks: each is one sentence; each has a visible glyph on the card; each has at
 least one *interesting* partner; no Mark is strictly best. Rule-twist Marks are how "special cards
 put twists into the games" happens *without* changing the deck's identity.

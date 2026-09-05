@@ -2,6 +2,7 @@ import feelJson from './feel.json';
 import upgradesJson from './upgrades.json';
 import milestonesJson from './milestones.json';
 import constellationJson from './constellation.json';
+import marksJson from './marks.json';
 import {
   FeelSchema,
   type Feel,
@@ -14,7 +15,9 @@ import {
   ConstellationSchema,
   type ConstellationNodeDef,
   type ConstellationEffect,
-  type ConstellationBranch
+  type ConstellationBranch,
+  MarksSchema,
+  type MarkDef
 } from './schemas';
 
 /** Validated at module load: a malformed entry fails loudly (ADR-008). */
@@ -22,6 +25,7 @@ export const FEEL: Feel = FeelSchema.parse(feelJson);
 export const UPGRADES: UpgradeDef[] = UpgradesSchema.parse(upgradesJson);
 export const MILESTONES: MilestoneDef[] = MilestonesSchema.parse(milestonesJson);
 export const CONSTELLATION: ConstellationNodeDef[] = ConstellationSchema.parse(constellationJson);
+export const MARKS: MarkDef[] = MarksSchema.parse(marksJson);
 export type {
   Feel,
   UpgradeDef,
@@ -30,5 +34,6 @@ export type {
   MilestoneDef,
   ConstellationNodeDef,
   ConstellationEffect,
-  ConstellationBranch
+  ConstellationBranch,
+  MarkDef
 };

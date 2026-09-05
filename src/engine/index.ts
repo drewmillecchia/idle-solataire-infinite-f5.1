@@ -19,6 +19,9 @@ export * from './economy/milestones';
 export * from './economy/prestige';
 export * from './economy/constellation';
 
+// Marks.
+export * from './marks/index';
+
 // Tick and offline.
 export * from './tick';
 
