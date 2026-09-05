@@ -166,8 +166,19 @@ export function derive(state: GameState): Derived {
       sparkMult = sparkMult.times(0.5);
       autoDealerUnlocked = true;
       break;
+    case 'gambler': {
+      // The wager `dealHand` rolled for this hand (docs/02-game-design.md §5). It is applied HERE
+      // and nowhere else (invariant #2), and it moves the two payouts the player feels move —
+      // sparks and the win burst — not the idle deck rate, so a bad roll never stalls the deck.
+      // A state that has never met the Gambler carries roll 1, so this is a no-op for everyone else.
+      const raw = state.run.hand?.roll;
+      const roll = typeof raw === 'number' && Number.isFinite(raw) && raw > 0 ? raw : 1;
+      sparkMult = sparkMult.times(roll);
+      burstMult = burstMult.times(roll);
+      break;
+    }
     default:
-      // 'none', 'gambler', 'scholar': no adjustment in this slice.
+      // 'none', 'scholar': no adjustment in this slice.
       break;
   }
 

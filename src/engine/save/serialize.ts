@@ -19,6 +19,7 @@ import type {
   StatsState
 } from '../state';
 import { markDef, syncMarkCache } from '../marks/placement';
+import { ROLL_MAX, ROLL_MIN } from '../economy/hand';
 import { NUMBERING_ORDER } from '../numbering';
 import type { CardState, NumberingId, WayId } from '../types';
 import { migrate } from './migrate';
@@ -144,14 +145,26 @@ function repairNumberingList(value: unknown, fallback: NumberingId[]): Numbering
   return filtered.length > 0 ? filtered : fallback;
 }
 
-/** Per-hand Mark scratch. Ranks outside 1..13 and non-integer card ids are dropped. */
+/**
+ * Per-hand Mark scratch. Ranks outside 1..13 and non-integer card ids are dropped, and the
+ * Gambler's wager is clamped into [ROLL_MIN, ROLL_MAX] so a hand-edited save cannot mint a x1e9
+ * burst (invariant #10: repair, never throw).
+ */
 function repairHand(value: unknown, fallback: HandState): HandState {
-  if (!isRecord(value)) return { echoRanks: [...fallback.echoRanks], homedThisHand: [...fallback.homedThisHand] };
+  if (!isRecord(value)) {
+    return {
+      echoRanks: [...fallback.echoRanks],
+      homedThisHand: [...fallback.homedThisHand],
+      roll: fallback.roll
+    };
+  }
   const ranks = Array.isArray(value.echoRanks) ? value.echoRanks : [];
   const homed = Array.isArray(value.homedThisHand) ? value.homedThisHand : [];
+  const rawRoll = toNum(value.roll, fallback.roll);
   return {
     echoRanks: ranks.filter((r): r is number => typeof r === 'number' && Number.isInteger(r) && r >= 1 && r <= 13),
-    homedThisHand: homed.filter((c): c is number => typeof c === 'number' && Number.isInteger(c) && c >= 0 && c < 52)
+    homedThisHand: homed.filter((c): c is number => typeof c === 'number' && Number.isInteger(c) && c >= 0 && c < 52),
+    roll: Math.min(ROLL_MAX, Math.max(ROLL_MIN, rawRoll))
   };
 }
 
@@ -217,6 +230,12 @@ function repairPrestige(value: unknown, fallback: PrestigeState): PrestigeState 
   return {
     cuts: toDecimal(value.cuts, fallback.cuts),
     lifetimeCuts: toDecimal(value.lifetimeCuts, fallback.lifetimeCuts),
+    // Clamped into [0, lifetimeCuts]: a cycle start beyond the lifetime would make `cycleCuts`
+    // negative, and a negative one would mint Permutations from nothing.
+    cutsAtCycleStart: clampCycleStart(
+      toDecimal(value.cutsAtCycleStart, fallback.cutsAtCycleStart),
+      toDecimal(value.lifetimeCuts, fallback.lifetimeCuts)
+    ),
     cutsPerformed: Math.max(0, Math.floor(toNum(value.cutsPerformed, fallback.cutsPerformed))),
     permutations: toDecimal(value.permutations, fallback.permutations),
     lifetimePermutations: toDecimal(value.lifetimePermutations, fallback.lifetimePermutations),
@@ -224,6 +243,12 @@ function repairPrestige(value: unknown, fallback: PrestigeState): PrestigeState 
     constellation: toStringNumberRecord(value.constellation, {}),
     waysUnlocked: repairWays(value.waysUnlocked, fallback.waysUnlocked)
   };
+}
+
+/** A cycle start is meaningful only inside [0, lifetimeCuts]. */
+function clampCycleStart(start: Decimal, lifetimeCuts: Decimal): Decimal {
+  if (Decimal.isNaN(start) || start.lt(0)) return new Decimal(0);
+  return start.gt(lifetimeCuts) ? lifetimeCuts : start;
 }
 
 function repairSettings(value: unknown, fallback: SettingsState): SettingsState {

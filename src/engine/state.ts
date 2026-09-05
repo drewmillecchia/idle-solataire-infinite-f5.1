@@ -6,7 +6,7 @@ import { D } from './numbers';
 import type { CardId, CardState, NumberingId, WayId } from './types';
 
 /** Bump on any state-shape change; add a matching branch in save/migrate.ts. */
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 /** Per-hand scratch for the Marks that only reach across one hand. Reset by `dealHand`. */
 export interface HandState {
@@ -14,6 +14,12 @@ export interface HandState {
   echoRanks: number[];
   /** Cards played home this hand, in order. */
   homedThisHand: CardId[];
+  /**
+   * Way of the Gambler's wager for this hand: a multiplier in [0.5, 3] rolled by `dealHand` and
+   * re-rolled upward by `winHand`. 1 (no effect) for every other Way, and the default everywhere
+   * else, so a state that never met the Gambler behaves exactly as before.
+   */
+  roll: number;
 }
 
 export interface RunState {
@@ -38,6 +44,12 @@ export interface RunState {
 export interface PrestigeState {
   cuts: Decimal;
   lifetimeCuts: Decimal;
+  /**
+   * `lifetimeCuts` at the moment the current Reshuffle cycle began (the seed a Reshuffle wrote, or
+   * 0 before the first one). `cycleCuts = lifetimeCuts - cutsAtCycleStart` is what layer 2
+   * measures — the layer-2 analogue of `run.earnedAtStart`.
+   */
+  cutsAtCycleStart: Decimal;
   cutsPerformed: number;
   permutations: Decimal;
   lifetimePermutations: Decimal;
@@ -123,11 +135,12 @@ export function createInitialState(now: number): GameState {
       handsWon: 0,
       homedThisRun: 0,
       undosThisHand: 0,
-      hand: { echoRanks: [], homedThisHand: [] }
+      hand: { echoRanks: [], homedThisHand: [], roll: 1 }
     },
     prestige: {
       cuts: D(0),
       lifetimeCuts: D(0),
+      cutsAtCycleStart: D(0),
       cutsPerformed: 0,
       permutations: D(0),
       lifetimePermutations: D(0),

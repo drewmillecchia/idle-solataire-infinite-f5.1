@@ -95,4 +95,10 @@ docs/  brainstorming/  memory/  .claude/{agents,skills}
   slots, interpreter over the bus with `DEPTH_CAP` 3, `twistsFor(state)` feeding the rules' `Twists`), Lantern/
   Tithe in derive, Anchor in performCut, Heavy via the host's `card-moved` event, save v3. Placement UI lives in
   the Deck panel; glyphs render on the cards. 213 tests + `tools/marks-flow.mjs`.
-- Next: M5 the long game (Reshuffle → Permutations, numbering ladder, 52! odometer + sky, Gambler/Scholar).
+- **M5 done** — Reshuffle (`economy/reshuffle.ts`: scale-free like Cut, `RESHUFFLE_BASE` 8, cycle seed `2+8n`
+  into the Cuts balance), numbering ladder (`economy/numberingLadder.ts` + `content/numbering.json`), exact
+  bigint 52! odometer (`engine/permutation.ts`, `journeyFraction` is THE progress number), Gambler roll in
+  derive, save v4. Permute panel + ladder shapes + odometer footer in the UI. 349 tests.
+- **Review pass done** (20 confirmed findings fixed; see `memory/lessons.md`).
+- Open: Scholar's winnable deals (solver worker), Gambler Mark fizzle, Golf/Pyramid feel pass on iPad, M6 sound
+  polish + Idle Riffle, M7 server.

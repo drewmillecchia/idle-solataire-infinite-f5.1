@@ -116,22 +116,22 @@ function topByCharge(state: GameState, count: number): Set<number> {
 }
 
 /**
- * Takes the Cut: banks the Cuts, then resets the run. `lifetimeShuffles` is NEVER touched, and
- * `revealed` / `milestones` are never re-hidden. Returns the Cuts awarded (0 if not available).
+ * Sleeps the deck and starts a fresh run. Shared by BOTH prestige layers: `performCut` and
+ * `performReshuffle` reset a run identically, so the Anchor and Kept Flame semantics can only ever
+ * be defined once. It banks nothing and emits nothing — the caller owns the currency and the event.
+ *
+ * `lifetimeShuffles` is NEVER touched (invariant #5), and `revealed` / `milestones` are never
+ * re-hidden.
  */
-export function performCut(state: GameState, bus: EventBus, way: WayId, now: number): Decimal {
-  const derived = derive(state);
-  const earned = cutsOnCut(state, derived);
-  if (earned.lt(1)) return D(0);
-
-  state.prestige.cuts = state.prestige.cuts.plus(earned);
-  state.prestige.lifetimeCuts = state.prestige.lifetimeCuts.plus(earned);
-  state.prestige.cutsPerformed += 1;
-  state.stats.totalCuts += 1;
-
-  const runSeconds = Math.max(0, (now - state.run.startedAt) / 1000);
-  const best = state.stats.fastestCutSeconds;
-  state.stats.fastestCutSeconds = best === null ? runSeconds : Math.min(best, runSeconds);
+export function resetRun(
+  state: GameState,
+  bus: EventBus,
+  way: WayId,
+  now: number,
+  derived: Derived
+): WayId {
+  // Reserved: the reset itself is silent, and the caller emits the layer's own event.
+  void bus;
 
   // Cards: everything sleeps except the best-charged `keepAwake` of them, plus every Anchored card,
   // which keeps its wake AND its full charge — that is the whole of the Anchor mark.
@@ -165,8 +165,30 @@ export function performCut(state: GameState, bus: EventBus, way: WayId, now: num
     handsWon: 0,
     homedThisRun: 0,
     undosThisHand: 0,
-    hand: { echoRanks: [], homedThisHand: [] }
+    hand: { echoRanks: [], homedThisHand: [], roll: 1 }
   };
+  return chosen;
+}
+
+/**
+ * Takes the Cut: banks the Cuts, then resets the run. `lifetimeShuffles` is NEVER touched, and
+ * `revealed` / `milestones` are never re-hidden. Returns the Cuts awarded (0 if not available).
+ */
+export function performCut(state: GameState, bus: EventBus, way: WayId, now: number): Decimal {
+  const derived = derive(state);
+  const earned = cutsOnCut(state, derived);
+  if (earned.lt(1)) return D(0);
+
+  state.prestige.cuts = state.prestige.cuts.plus(earned);
+  state.prestige.lifetimeCuts = state.prestige.lifetimeCuts.plus(earned);
+  state.prestige.cutsPerformed += 1;
+  state.stats.totalCuts += 1;
+
+  const runSeconds = Math.max(0, (now - state.run.startedAt) / 1000);
+  const best = state.stats.fastestCutSeconds;
+  state.stats.fastestCutSeconds = best === null ? runSeconds : Math.min(best, runSeconds);
+
+  const chosen = resetRun(state, bus, way, now, derived);
 
   bus.emit({ type: 'cut', cuts: earned, way: chosen });
   return earned;

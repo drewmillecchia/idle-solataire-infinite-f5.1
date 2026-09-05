@@ -9,6 +9,7 @@ export * from './rng';
 export * from './numbers';
 export * from './numbering';
 export * from './state';
+export * from './permutation';
 
 // Economy.
 export * from './economy/derive';
@@ -18,6 +19,8 @@ export * from './economy/upgrades';
 export * from './economy/milestones';
 export * from './economy/prestige';
 export * from './economy/constellation';
+export * from './economy/reshuffle';
+export * from './economy/numberingLadder';
 
 // Marks.
 export * from './marks/index';

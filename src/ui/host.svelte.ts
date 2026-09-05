@@ -16,11 +16,13 @@ import {
   formatNumber, formatRate, visibleUpgrades, upgradeCost, buyUpgrade, maxAffordable, nextMilestone, SAVE_VERSION,
   cutPotential, cutsOnCut, canCut, performCut, cutThreshold, runEarned,
   nodeLevel, nodeCost, canBuyNode, buyNode, visibleNodes,
-  attachMarks, twistsFor, availableMarks, canPlace, placeMark, removeMark, placementFor, markSlots, usedSlots, markDef
+  attachMarks, twistsFor, availableMarks, canPlace, placeMark, removeMark, placementFor, markSlots, usedSlots, markDef,
+  canReshuffle, permutationsOnReshuffle, reshufflePotential, reshuffleThreshold, cycleCuts, performReshuffle,
+  numberingOptions, unlockNumbering, selectNumbering, journeyFraction, arrangementIndex, LOG10_FACT_52
 } from '$engine/index';
 import { MILESTONES, FEEL, MARKS, type Feel } from '$content/index';
 import { WAYS } from '$content/ways';
-import type { WayId } from '$engine/types';
+import type { WayId, NumberingId } from '$engine/types';
 import type { Table, TableHost } from '../table/Table';
 import { loadSave, persistSave, requestPersistence, clearSaves } from '../platform/storage';
 import { sound, haptic, unlockAudio } from '../audio/presenters';
@@ -81,6 +83,19 @@ export interface View {
     picking: string | null;
     canPlace: boolean;
   };
+  reshuffle: {
+    revealed: boolean;
+    can: boolean;
+    onReshuffle: string;
+    progress: number;
+    cycleCuts: string;
+    threshold: string;
+    permutations: string;
+    lifetimePermutations: string;
+    reshuffles: number;
+  };
+  numbering: { id: string; name: string; blurb: string; cost: string; unlocked: boolean; selected: boolean; affordable: boolean; values: number[] }[];
+  odometer: string;
   constellation: { id: string; name: string; blurb: string; branch: string; level: number; max: number; cost: string; affordable: boolean; effect: string }[];
   gameId: string;
   gameName: string;
@@ -89,7 +104,6 @@ export interface View {
   settings: GameState['settings'];
 }
 
-const LOG_52 = 67.9066; // log10(52!)
 
 export class GameHost implements TableHost {
   state: GameState;
@@ -171,6 +185,7 @@ export class GameHost implements TableHost {
       if (m) entries.push({ id: m.id, text: m.ledger, at: 0 });
     }
     for (let i = 1; i <= this.state.prestige.cutsPerformed; i++) entries.push({ id: `cut-${i}`, text: `Cut ${i}. The deck forgets; the Keeper does not.`, at: 0 });
+    for (let i = 1; i <= this.state.prestige.reshuffles; i++) entries.push({ id: `reshuffle-${i}`, text: `Reshuffle ${i}. Every cut, traded for a new shape of value.`, at: 0 });
     this.ledger = entries.reverse();
   }
 
@@ -218,6 +233,7 @@ export class GameHost implements TableHost {
       n++;
     }
     this.state.lastSeenAt = Date.now();
+    if (n > 0) { visibleUpgrades(this.state, this.bus); availableMarks(this.state, this.bus); }
     this.saveTimer += dt;
     if (this.saveTimer > 5) { this.saveTimer = 0; void this.save(); }
     this.snapTimer += dt;
@@ -265,7 +281,7 @@ export class GameHost implements TableHost {
 
   private config(): GameConfig { return this.state.gameConfig[this.module.id] ?? {}; }
 
-  newHand(silent = false): void {
+  newHand(silent = false, count = !silent): void {
     if (this.cutting) return;
     this.dealerPending = null;
     this.table?.clearHint();
@@ -275,7 +291,7 @@ export class GameHost implements TableHost {
     this.handMoves = 0;
     this.handStartedAt = performance.now();
     this.dealerSeen.clear();
-    dealHand(this.state, this.bus, this.module.id, this.seed);
+    dealHand(this.state, this.bus, this.module.id, this.seed, { count });
     this.wonBanner = null;
     const style = this.state.settings.shuffleStyle === 'random' ? (Math.random() < 0.5 ? 'riffle' : 'overhand') : this.state.settings.shuffleStyle;
     this.table?.setBoard(this.module.view(this.board), silent ? { instant: true } : { deal: true, shuffle: style });
@@ -479,6 +495,30 @@ export class GameHost implements TableHost {
     if (this.table) this.table.cutCeremony(finish);
     else finish();
   }
+  reshuffle(): void {
+    if (this.cutting || !canReshuffle(this.state, this.derived)) return;
+    this.cutting = true;
+    this.wonBanner = null;
+    this.dealerPending = null;
+    this.table?.clearHint();
+    this.pushView();
+    const finish = () => {
+      const earned = performReshuffle(this.state, this.bus, Date.now());
+      this.derived = derive(this.state);
+      this.cutting = false;
+      this.toast(`The deck is reshuffled. ${formatNumber(earned)} ${earned.eq(1) ? 'Permutation' : 'Permutations'}.`);
+      this.newHand();
+      void this.save();
+    };
+    if (this.table) this.table.cutCeremony(finish);
+    else finish();
+  }
+  unlockNumbering(id: string): void {
+    if (unlockNumbering(this.state, this.bus, id as NumberingId)) { this.derived = derive(this.state); sound('chime', 0.6); haptic('soft'); this.pushView(); void this.save(); }
+  }
+  selectNumbering(id: string): void {
+    if (selectNumbering(this.state, id as NumberingId)) { this.derived = derive(this.state); sound('tick', 0.5); this.pushView(); void this.save(); }
+  }
   buyNode(id: string): void {
     if (buyNode(this.state, this.bus, id)) { this.derived = derive(this.state); sound('chime', 0.5); haptic('soft'); this.pushView(); }
   }
@@ -530,6 +570,7 @@ export class GameHost implements TableHost {
         else if (e.feature.startsWith('mark:')) { const m = markDef(e.feature.slice(5)); if (m) this.toast(`A Mark is yours to place: ${m.name}.`); }
         break;
       case 'mark-fired': this.sound('tick', 0.6); this.derived = derive(this.state); break;
+      case 'reshuffle': this.ledger.unshift({ id: `reshuffle-${this.state.prestige.reshuffles}`, text: `Reshuffle ${this.state.prestige.reshuffles}. Every cut, traded for a new shape of value.`, at: Date.now() }); break;
       case 'cut': this.ledger.unshift({ id: `cut-${this.state.prestige.cutsPerformed}`, text: `Cut ${this.state.prestige.cutsPerformed}. The deck forgets; the Keeper does not.`, at: Date.now() }); break;
       case 'charge-gained': case 'card-home': this.derived = derive(this.state); break;
       default: break;
@@ -551,6 +592,9 @@ export class GameHost implements TableHost {
       nextMilestoneLabel: '', nextMilestoneProgress: 0, journey: 0, ledger: [], toasts: [], upgrades: [], offline: null, wonBanner: null, lastGesture: '', storageWarning: false,
       cut: { revealed: false, canCut: false, cutsOnCut: '0', progress: 0, potential: '0', runEarned: '0', threshold: '0', cuts: '0', lifetimeCuts: '0', cutsPerformed: 0, way: 'none', ways: [], cutting: false },
       constellation: [],
+      reshuffle: { revealed: false, can: false, onReshuffle: '0', progress: 0, cycleCuts: '0', threshold: '0', permutations: '0', lifetimePermutations: '0', reshuffles: 0 },
+      numbering: [],
+      odometer: '0',
       deck: [],
       marks: { slots: 0, used: 0, available: [], placed: [], picking: null, canPlace: false },
       gameId: 'klondike', gameName: 'Klondike', games: [], gameOptions: [], settings: { sound: true, haptics: true, reducedMotion: false, autoDealerDelaySeconds: 12, shuffleStyle: 'riffle' }
@@ -592,7 +636,7 @@ export class GameHost implements TableHost {
       dealerCountdown: d.autoDealerUnlocked && this.dealerEnabled ? Math.max(0, s.settings.autoDealerDelaySeconds - idle) : 0,
       nextMilestoneLabel: label,
       nextMilestoneProgress: prog,
-      journey: Math.min(1, lifeLog / LOG_52),
+      journey: journeyFraction(s),
       ledger: this.ledger.slice(0, 12),
       toasts: this.toasts.slice(),
       upgrades: visibleUpgrades(s).map((u) => {
@@ -622,11 +666,24 @@ export class GameHost implements TableHost {
       marks: {
         slots: markSlots(s, d),
         used: usedSlots(s),
-        available: availableMarks(s, this.bus).map((m) => ({ id: m.id, name: m.name, glyph: m.glyph, rule: m.rule, arity: m.arity, kind: m.kind, placed: s.marks.placed.filter((p) => p.mark === m.id).length })),
+        available: availableMarks(s).map((m) => ({ id: m.id, name: m.name, glyph: m.glyph, rule: m.rule, arity: m.arity, kind: m.kind, placed: s.marks.placed.filter((p) => p.mark === m.id).length })),
         placed: s.marks.placed.map((p) => { const m = markDef(p.mark); return { id: p.mark, name: m?.name ?? p.mark, glyph: m?.glyph ?? '?', cards: [...p.cards] }; }),
         picking: this.pickingMark,
         canPlace: this.pickingMark !== null && canPlace(s, d, this.pickingMark, this.selectedCards)
       },
+      reshuffle: {
+        revealed: s.revealed.includes('reshuffle') || s.prestige.reshuffles > 0,
+        can: canReshuffle(s, d) && !this.cutting,
+        onReshuffle: formatNumber(permutationsOnReshuffle(s, d)),
+        progress: Math.min(1, reshufflePotential(s, d).toNumber()),
+        cycleCuts: formatNumber(cycleCuts(s)),
+        threshold: formatNumber(reshuffleThreshold(s, d)),
+        permutations: formatNumber(s.prestige.permutations),
+        lifetimePermutations: formatNumber(s.prestige.lifetimePermutations),
+        reshuffles: s.prestige.reshuffles
+      },
+      numbering: numberingOptions(s).map((o) => ({ id: o.id, name: o.name, blurb: o.blurb, cost: formatNumber(o.cost), unlocked: o.unlocked, selected: o.selected, affordable: o.affordable, values: [...o.values] })),
+      odometer: formatBig(arrangementIndex(s)),
       constellation: visibleNodes(s).map((n) => ({
         id: n.id, name: n.name, blurb: n.blurb, branch: n.branch, level: nodeLevel(s, n.id), max: n.max,
         cost: formatNumber(nodeCost(s, n.id)), affordable: canBuyNode(s, n.id), effect: describeNode(n.effect)
@@ -656,6 +713,14 @@ function describeEffect(e: { kind: string; per?: number; add?: number; suit?: st
     default: return '';
   }
 }
+/** A bigint for the odometer: grouped digits up to 15 digits, then d.ddd×10^n. */
+function formatBig(n: bigint): string {
+  const str = n.toString();
+  if (str.length <= 15) return str.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return `${str[0]}.${str.slice(1, 4)}e${str.length - 1}`;
+}
+void LOG10_FACT_52;
+
 function describeNode(e: { kind: string; per?: number; add?: number; way?: string }): string {
   switch (e.kind) {
     case 'globalMult': return `+${Math.round((e.per ?? 0) * 100)}% to everything, forever, per level`;

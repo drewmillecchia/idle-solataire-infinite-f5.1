@@ -47,6 +47,27 @@ function v2ToV3(raw: RawSave): RawSave {
   return { ...raw, version: 3, run, marks: { placed: [] } };
 }
 
+/**
+ * v3 -> v4 (M5, Reshuffle + the Gambler): adds `prestige.cutsAtCycleStart` and `run.hand.roll`.
+ *
+ * A v3 save has never reshuffled, so its whole Cut history belongs to the current cycle:
+ * `cutsAtCycleStart` is 0 and `cycleCuts == lifetimeCuts`. That is the honest reading, and it
+ * means a returning v3 player can take the Reshuffle their cuts have already earned. `roll` is 1
+ * (no wager) because the Gambler could not be played before v4.
+ */
+function v3ToV4(raw: RawSave): RawSave {
+  const prestige = asRecord(raw.prestige);
+  // A plain string: the JSON reviver has already run, so `toDecimal` in the repair pass parses it.
+  prestige.cutsAtCycleStart = '0';
+
+  const run = asRecord(raw.run);
+  const hand = asRecord(run.hand);
+  hand.roll = 1;
+  run.hand = hand;
+
+  return { ...raw, version: 4, run, prestige };
+}
+
 export function migrate(raw: RawSave): RawSave {
   const version = typeof raw.version === 'number' ? raw.version : 0;
   switch (version) {
@@ -55,6 +76,8 @@ export function migrate(raw: RawSave): RawSave {
     case 2:
       return v2ToV3(raw);
     case 3:
+      return v3ToV4(raw);
+    case 4:
       return raw;
     default:
       // Unknown, missing, or future version: pass through. `deserialize`'s repair pass fills

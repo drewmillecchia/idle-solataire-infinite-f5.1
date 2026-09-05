@@ -1,0 +1,38 @@
+[
+  {
+    "id": "prime",
+    "name": "Prime",
+    "blurb": "The ranks stop being evenly spaced. The high cards pull ahead a little.",
+    "cost": "1"
+  },
+  {
+    "id": "triangular",
+    "name": "Triangular",
+    "blurb": "Each rank is the sum of the ranks below it. A gentle tilt toward the court.",
+    "cost": "2"
+  },
+  {
+    "id": "fibonacci",
+    "name": "Fibonacci",
+    "blurb": "Every rank is the two before it. The tilt steepens.",
+    "cost": "4"
+  },
+  {
+    "id": "powers",
+    "name": "Powers of Two",
+    "blurb": "Each rank doubles the last. The King is worth half the deck.",
+    "cost": "8"
+  },
+  {
+    "id": "factorial",
+    "name": "Factorial",
+    "blurb": "The low cards give up nearly everything so the King can hold it.",
+    "cost": "16"
+  },
+  {
+    "id": "tetration",
+    "name": "Tetration",
+    "blurb": "One card carries the deck. The other twelve are ceremony.",
+    "cost": "40"
+  }
+]

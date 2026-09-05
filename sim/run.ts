@@ -3,9 +3,12 @@ import {
   createInitialState, step, derive, homeCard, tableauSpark, winHand, dealHand,
   buyUpgrade, visibleUpgrades, upgradeCost, maxAffordable,
   canCut, cutsOnCut, performCut,
+  canReshuffle, permutationsOnReshuffle, performReshuffle, cycleCuts as cycleCutsOf,
+  numberingOptions, unlockNumbering, selectNumbering,
   buyNode, canBuyNode, nodeCost, visibleNodes,
   formatNumber, formatRate
 } from '$engine/index';
+import type { NumberingId } from '$engine/types';
 import type Decimal from 'break_eternity.js';
 import { EventBus } from '$engine/events';
 import { mulberry32 } from '$engine/rng';
@@ -27,6 +30,35 @@ export interface CutRecord {
   earned: number;
   /** log10 of deckRate immediately before the cut. */
   log10RateBefore: number;
+  /** Reshuffle cycle this cut belongs to (0 = before the first reshuffle). */
+  cycle: number;
+  /** `cycleCuts` immediately after this cut: what layer 2 measures. */
+  cycleCuts: number;
+}
+
+export interface ReshuffleRecord {
+  /** Simulated seconds at which the reshuffle was taken. */
+  t: number;
+  /** Permutations awarded. */
+  earned: number;
+  /** `cycleCuts` the cycle ended on. */
+  cycleCuts: number;
+}
+
+/** One Reshuffle cycle: from a reshuffle (or launch) to the next one. */
+export interface CycleRecord {
+  index: number;
+  start: number;
+  /** null while the cycle is still running at the end of the sim. */
+  end: number | null;
+  /** `cycleCuts` at the end (or at the end of the sim). */
+  cutsInCycle: number;
+  /**
+   * Simulated seconds from the cycle's start until it had banked `n` cycle cuts, or null if it
+   * never got there. This is the layer-2 pacing measure: cycle 2 must reach cycle 1's final count
+   * faster than cycle 1 did.
+   */
+  timeToCycleCuts: (n: number) => number | null;
 }
 
 export interface SimResult {
@@ -55,6 +87,13 @@ export interface SimResult {
   log10RateAfterCut: (number | null)[];
   lifetimeCuts: number;
   nodes: Record<string, number>;
+  firstReshuffleAt: number | null;
+  reshuffles: ReshuffleRecord[];
+  cycles: CycleRecord[];
+  lifetimePermutations: number;
+  /** Numbering systems owned at the end, and the one selected. */
+  unlockedNumberings: NumberingId[];
+  numbering: NumberingId;
   /** Cuts taken during simulated hour `h` (h = 0 is the first hour). */
   cutsPerHourInHour: (h: number) => number;
 }
@@ -74,8 +113,25 @@ export function runSim(hours: number, profile: Profile, seed = 1, opts: SimOptio
     samples: [], milestones: [], reveals: [],
     firstCutAvailableAt: null, firstCutAt: null, cuts: [], log10RateAfterCut: [],
     lifetimeCuts: 0, nodes: {},
+    firstReshuffleAt: null, reshuffles: [], cycles: [], lifetimePermutations: 0,
+    unlockedNumberings: [], numbering: 'natural',
     cutsPerHourInHour: (h: number) => res.cuts.filter((c) => c.t >= h * 3600 && c.t < (h + 1) * 3600).length
   };
+  /** Cuts recorded in a cycle, so `timeToCycleCuts` can be answered without re-scanning. */
+  const cycleOf = (index: number): CycleRecord => ({
+    index,
+    start: 0,
+    end: null,
+    cutsInCycle: 0,
+    timeToCycleCuts: (n: number) => {
+      const cycle = res.cycles[index];
+      if (!cycle) return null;
+      const hit = res.cuts.find((c) => c.cycle === index && c.cycleCuts >= n);
+      return hit ? hit.t - cycle.start : null;
+    }
+  });
+  res.cycles.push(cycleOf(0));
+
   let t = 0;
   const dt = opts.dt ?? 0.25;
   const total = hours * 3600;
@@ -96,6 +152,34 @@ export function runSim(hours: number, profile: Profile, seed = 1, opts: SimOptio
   });
 
   const log10 = (d: Decimal): number => (d.lte(0) ? -Infinity : d.log10().toNumber());
+
+  /** Spends Permutations on the cheapest system still locked, if the balance covers it. */
+  const buyCheapestNumbering = () => {
+    const locked = numberingOptions(state).filter((o) => !o.unlocked && o.affordable);
+    locked.sort((a, b) => a.cost.cmp(b.cost));
+    const pick = locked[0];
+    if (pick) unlockNumbering(state, bus, pick.id);
+  };
+
+  /**
+   * Selects the owned system with the highest immediate deckRate. Every system is normalized to
+   * the same 13-rank total, so this is a redistribution: which one wins depends on which cards are
+   * awake and charged. `derive` is pure, so trying each one on the live state and restoring the
+   * choice is equivalent to trying it on a clone.
+   */
+  const pickBestNumbering = () => {
+    const current = state.numbering;
+    let best = current;
+    let bestRate = derive(state).deckRate;
+    for (const opt of numberingOptions(state)) {
+      if (!opt.unlocked || opt.id === current) continue;
+      state.numbering = opt.id;
+      const rate = derive(state).deckRate;
+      if (rate.gt(bestRate)) { bestRate = rate; best = opt.id; }
+    }
+    state.numbering = current;
+    selectNumbering(state, best);
+  };
 
   const newHand = () => {
     board = game.deal(rng, {}, NO_TWISTS);
@@ -193,10 +277,43 @@ export function runSim(hours: number, profile: Profile, seed = 1, opts: SimOptio
           const before = log10(dNow.deckRate);
           const earned = performCut(state, bus, 'hand', t * 1000);
           if (earned.gt(0)) {
-            res.cuts.push({ t, earned: earned.toNumber(), log10RateBefore: before });
+            const cycle = res.cycles[res.cycles.length - 1];
+            const banked = cycleCutsOf(state).toNumber();
+            res.cuts.push({
+              t, earned: earned.toNumber(), log10RateBefore: before,
+              cycle: cycle ? cycle.index : 0, cycleCuts: banked
+            });
+            if (cycle) cycle.cutsInCycle = banked;
             res.log10RateAfterCut.push(null);
             if (res.firstCutAt === null) res.firstCutAt = t;
             newHand();
+          }
+        }
+      }
+
+      // Layer 2. Take the reshuffle as soon as it is worth taking, but once permutations are
+      // banked, hold out for a cycle worth half of everything banked so far — the same shape of
+      // policy the cut uses, one layer up.
+      if (profile === 'engaged' && playing) {
+        const dRe = derive(state);
+        if (canReshuffle(state, dRe)) {
+          const gain = permutationsOnReshuffle(state, dRe);
+          const bar = Math.max(1, 0.5 * state.prestige.lifetimePermutations.toNumber());
+          if (gain.gte(bar)) {
+            const ending = res.cycles[res.cycles.length - 1];
+            const banked = cycleCutsOf(state).toNumber();
+            const earned = performReshuffle(state, bus, t * 1000);
+            if (earned.gt(0)) {
+              if (ending) { ending.end = t; ending.cutsInCycle = banked; }
+              res.reshuffles.push({ t, earned: earned.toNumber(), cycleCuts: banked });
+              if (res.firstReshuffleAt === null) res.firstReshuffleAt = t;
+              const next = cycleOf(res.cycles.length);
+              next.start = t;
+              res.cycles.push(next);
+              buyCheapestNumbering();
+              pickBestNumbering();
+              newHand();
+            }
           }
         }
       }
@@ -215,5 +332,10 @@ export function runSim(hours: number, profile: Profile, seed = 1, opts: SimOptio
   res.wins = state.stats.totalWins;
   res.lifetimeCuts = state.prestige.lifetimeCuts.toNumber();
   res.nodes = { ...state.prestige.constellation };
+  res.lifetimePermutations = state.prestige.lifetimePermutations.toNumber();
+  res.unlockedNumberings = [...state.unlockedNumberings];
+  res.numbering = state.numbering;
+  const open = res.cycles[res.cycles.length - 1];
+  if (open && open.end === null) open.cutsInCycle = cycleCutsOf(state).toNumber();
   return res;
 }

@@ -3,6 +3,7 @@ import upgradesJson from './upgrades.json';
 import milestonesJson from './milestones.json';
 import constellationJson from './constellation.json';
 import marksJson from './marks.json';
+import numberingJson from './numbering.json';
 import {
   FeelSchema,
   type Feel,
@@ -17,7 +18,9 @@ import {
   type ConstellationEffect,
   type ConstellationBranch,
   MarksSchema,
-  type MarkDef
+  type MarkDef,
+  NumberingLadderSchema,
+  type NumberingLadderEntry
 } from './schemas';
 
 /** Validated at module load: a malformed entry fails loudly (ADR-008). */
@@ -26,6 +29,7 @@ export const UPGRADES: UpgradeDef[] = UpgradesSchema.parse(upgradesJson);
 export const MILESTONES: MilestoneDef[] = MilestonesSchema.parse(milestonesJson);
 export const CONSTELLATION: ConstellationNodeDef[] = ConstellationSchema.parse(constellationJson);
 export const MARKS: MarkDef[] = MarksSchema.parse(marksJson);
+export const NUMBERING_LADDER: NumberingLadderEntry[] = NumberingLadderSchema.parse(numberingJson);
 export type {
   Feel,
   UpgradeDef,
@@ -35,5 +39,6 @@ export type {
   ConstellationNodeDef,
   ConstellationEffect,
   ConstellationBranch,
-  MarkDef
+  MarkDef,
+  NumberingLadderEntry
 };

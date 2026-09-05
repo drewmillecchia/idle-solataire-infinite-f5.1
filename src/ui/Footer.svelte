@@ -6,9 +6,9 @@
 
 <footer class="footer">
   <div class="left">
-    <span class="label">Witnessed</span>
-    <span class="num">{host.view.lifetime}</span>
-    <span class="dim">of 8.07e67</span>
+    <span class="label">Arrangement</span>
+    <span class="num" title="Your position among the 52! orderings of the deck">{host.view.odometer}</span>
+    <span class="dim">of 8.07e67 · {host.view.lifetime} witnessed</span>
   </div>
   <div class="mid">
     {#if host.view.won}<span class="won">Hand won.</span>{:else if host.view.stuck}<span class="dim">Nothing moves.</span>{/if}

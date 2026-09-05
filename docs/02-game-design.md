@@ -101,8 +101,11 @@ Trade the run (balance, run upgrades, most charge; Anchored cards keep theirs) f
 
 ### Layer 2 — Reshuffle → **Permutations**
 Trades *every cut ever made* for Permutations, which buy Numbering Systems and Mark slots.
-Revealed after 12 lifetime cuts (behavioural trigger, not a number). A fresh cycle is seeded with
-Cuts so it runs shorter than the last. Same two anti-divergence invariants.
+Revealed after 12 cuts performed (behavioural trigger, not a number). A fresh cycle is seeded with
+Cuts (`2 + 8 × reshuffles`, landing in the *balance*, so a new cycle opens with a Constellation
+shopping trip — that is what makes the layer worth entering, since the Cut potential is scale-free
+and resetting lifetime Cuts costs no cadence). `RESHUFFLE_BASE` 8, exponent 0.75; the second cycle
+runs 1.4–2.3× faster than the first in the sim. Same two anti-divergence invariants.
 
 ### Layer 3 — Ascend at 52! → **a new deck**
 Reaching 52! *once* (lifetime) opens Ascension. Each Ascension adds a card or a suit:
@@ -135,7 +138,7 @@ Constellation extends to 24 h. Welcome-back is a non-blocking ledger entry, not 
 | First Cut (engaged sim player) | 12–30 min |
 | Cuts per hour, hours 2–4 (engaged sim, cut when ≥1 and ≥30 % of lifetime) | 2–4 (was 3–6; see tuning log 2026-09-05 — the potential is scale-free by design, so runs lengthen as lifetime Cuts grow; Cuts *earned* per hour is 6–9) |
 | Run-upgrade tier exhausted | ~2 h engaged |
-| Reshuffle reveal | ~12 cuts (≈ 3–4 h engaged) |
+| Reshuffle reveal | 12 cuts *performed* (≈ 5–7 h engaged; the layer is already worth taking when it appears) |
 | Relaxer, 3 hands/day, no panels | still sees a new milestone at least every 2–3 days for the first month |
 | No economy divergence | 24 sim-hours engaged, finite |
 

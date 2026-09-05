@@ -171,3 +171,20 @@ export const MarkDefSchema = z.object({
 export type MarkDef = z.infer<typeof MarkDefSchema>;
 
 export const MarksSchema = z.array(MarkDefSchema);
+
+// ---- Numbering ladder (bought with Permutations; docs/02-game-design.md 3, 6) ----------------
+
+/**
+ * One rung of the Numbering ladder. `natural` is not here: it is owned from the first deal, so the
+ * ladder lists only what Permutations buy, in the order it is listed.
+ */
+export const NumberingLadderEntrySchema = z.object({
+  id: z.enum(['prime', 'triangular', 'fibonacci', 'powers', 'factorial', 'tetration']),
+  name: z.string().min(1),
+  blurb: z.string().min(1),
+  /** Cost in Permutations (the spendable balance, never lifetime). */
+  cost: decimalString
+});
+export type NumberingLadderEntry = z.infer<typeof NumberingLadderEntrySchema>;
+
+export const NumberingLadderSchema = z.array(NumberingLadderEntrySchema);

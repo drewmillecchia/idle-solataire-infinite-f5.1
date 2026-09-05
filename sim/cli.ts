@@ -13,6 +13,10 @@ console.log(`hands: ${r.hands}  wins: ${r.wins}  final rate: ${r.finalRate}  lif
 console.log(`cut available: ${at(r.firstCutAvailableAt)}   first cut: ${at(r.firstCutAt)}   cuts taken: ${r.cuts.length}  lifetime cuts: ${r.lifetimeCuts}`);
 console.log('cuts/hour: ' + Array.from({ length: Math.ceil(hours) }, (_, h) => `h${h + 1}=${r.cutsPerHourInHour(h)}`).join(' '));
 console.log('cuts: ' + r.cuts.map((c, k) => `${formatDuration(c.t)}+${c.earned}[log10 rate ${c.log10RateBefore.toFixed(1)}->${(r.log10RateAfterCut[k] ?? NaN).toFixed(1)}]`).join(', '));
+console.log(`reshuffles: ${r.reshuffles.length}  first: ${at(r.firstReshuffleAt)}  lifetime permutations: ${r.lifetimePermutations}`);
+console.log('reshuffle events: ' + (r.reshuffles.map((x) => `${formatDuration(x.t)}+${x.earned}[cycle cuts ${x.cycleCuts}]`).join(', ') || 'none'));
+console.log('cycles: ' + r.cycles.map((c) => `#${c.index} ${formatDuration(c.start)}->${c.end === null ? 'open' : formatDuration(c.end)} cuts=${c.cutsInCycle}${c.end === null ? '' : ` dur=${formatDuration(c.end - c.start)}`}`).join(' | '));
+console.log(`numbering: ${r.numbering}  unlocked: ${r.unlockedNumberings.join(', ')}`);
 console.log('nodes: ' + (Object.entries(r.nodes).map(([k, v]) => `${k}x${v}`).join(', ') || 'none'));
 console.log('reveals (first 60s): ' + r.reveals.filter((x) => x.t <= 60).map((x) => x.feature).join(', '));
 console.log('milestones: ' + r.milestones.map((m) => `${m.id}@${formatDuration(m.t)}`).join(', '));

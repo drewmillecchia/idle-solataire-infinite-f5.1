@@ -1,0 +1,38 @@
+// Layer 2 at the seam: make a reshuffle reachable, reshuffle via the panel, buy and select a numbering system.
+import { chromium } from 'playwright-core';
+const URL = process.argv[2] ?? 'http://127.0.0.1:3000/';
+const CHROME = `${process.env.HOME}/.cache/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-linux64/chrome-headless-shell`;
+const browser = await chromium.launch({ executablePath: CHROME });
+const page = await browser.newPage({ viewport: { width: 1180, height: 820 } });
+const errors = []; page.on('pageerror', (e) => errors.push(e.message));
+const fail = (m) => { console.error(`FAIL: ${m}`); process.exitCode = 1; };
+const step = (m) => console.log(`  · ${m}`);
+await page.goto(URL, { waitUntil: 'networkidle' });
+await page.waitForFunction(() => window.__game && window.__game.table);
+await page.evaluate(() => { window.__table.skipChoreography(); });
+await page.evaluate(() => { const g = window.__game; g.state.prestige.cutsPerformed = 12; g.state.prestige.lifetimeCuts = g.state.prestige.lifetimeCuts.plus(40); g.state.prestige.cuts = g.state.prestige.cuts.plus(40); g.pushView(); });
+await page.waitForTimeout(700);
+const r = await page.evaluate(() => window.__game.view.reshuffle);
+step(`reshuffle: ${JSON.stringify(r)}`);
+if (!r.revealed) fail('reshuffle not revealed at 12 cuts performed');
+if (!r.can) fail('reshuffle not available with 40 cycle cuts');
+await page.locator('.tabs button', { hasText: 'Permute' }).click();
+await page.waitForTimeout(200);
+await page.screenshot({ path: 'tools/out/permute-panel.png' });
+const life = await page.evaluate(() => window.__game.state.lifetimeShuffles.toString());
+await page.locator('button.go').click();
+await page.waitForFunction(() => window.__game.state.prestige.reshuffles > 0, null, { timeout: 15000 });
+await page.waitForTimeout(500);
+const after = await page.evaluate(() => { const g = window.__game; return { perms: g.state.prestige.lifetimePermutations.toString(), cuts: g.state.prestige.cuts.toString(), lifetimeCuts: g.state.prestige.lifetimeCuts.toString(), life: g.state.lifetimeShuffles.toString(), awake: g.derived.awakeCount, numbering: g.view.numbering.map((n) => `${n.id}:${n.unlocked ? 'u' : n.cost}`).join(' ') }; });
+step(`after: ${JSON.stringify(after)}`);
+if (Number(after.perms) < 1) fail('no permutations earned');
+if (Number(after.lifetimeCuts) !== 10) fail(`cuts not reseeded to 10, got ${after.lifetimeCuts}`);
+if (after.life !== life) fail('lifetimeShuffles changed');
+const bought = await page.evaluate(() => { const g = window.__game; const n = g.view.numbering.find((x) => !x.unlocked && x.affordable); if (!n) return null; g.unlockNumbering(n.id); g.selectNumbering(n.id); return { id: n.id, selected: g.state.numbering, rate: g.derived.deckRate.toString() }; });
+if (!bought) fail('no affordable numbering after a reshuffle'); else step(`unlocked+selected ${bought.id}; state.numbering=${bought.selected}`);
+if (bought && bought.selected !== bought.id) fail('numbering not selected');
+await page.waitForTimeout(200);
+await page.screenshot({ path: 'tools/out/permute-after.png' });
+await browser.close();
+if (errors.length) { console.error(errors.join('\n')); process.exitCode = 1; }
+console.log(process.exitCode ? 'RESHUFFLE FLOW: FAILED' : 'RESHUFFLE FLOW: OK');

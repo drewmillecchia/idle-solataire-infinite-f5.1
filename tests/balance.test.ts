@@ -15,15 +15,21 @@ const SHORT_HOURS = 0.75;
 const LONG_HOURS = 6;
 /** 4 simulated days for the relaxer. */
 const RELAXER_HOURS = 96;
+/** Long enough for three Reshuffles, so two whole layer-2 cycles can be compared. */
+const RESHUFFLE_HOURS = 8;
 
 let short: SimResult[] = [];
 let long: SimResult;
 let relaxer: SimResult;
+let cycles: SimResult;
 
 beforeAll(() => {
   short = SEEDS.map((s) => runSim(SHORT_HOURS, 'engaged', s));
   long = runSim(LONG_HOURS, 'engaged', 1);
   relaxer = runSim(RELAXER_HOURS, 'relaxer', 1);
+  // 0.5 s steps: `step` never clamps its delta (invariant #3), so a coarser sim is the same
+  // arithmetic, and it keeps this file inside its wall-clock budget.
+  cycles = runSim(RESHUFFLE_HOURS, 'engaged', 1, { dt: 0.5 });
 }, 180_000);
 
 function median(xs: number[]): number {
@@ -171,5 +177,63 @@ describe('the relaxer (3 hands a day, no panels)', () => {
     expect(relaxer.firstCutAvailableAt).not.toBeNull();
     // Measured: 3 h 34 m. The relaxer simply never opens the panel.
     expect(relaxer.firstCutAvailableAt as number).toBeLessThan(RELAXER_HOURS * 3600);
+  });
+});
+
+describe('Reshuffle, layer 2 (docs/02 §6)', () => {
+  it('reveals itself the moment the twelfth Cut is performed', () => {
+    const reveal = cycles.reveals.find((r) => r.feature === 'reshuffle');
+    expect(reveal).toBeDefined();
+    expect(cycles.cuts.length).toBeGreaterThanOrEqual(12);
+    const twelfth = cycles.cuts[11] as { t: number };
+    // The reveal is behavioural: cuts performed, checked once per `step`.
+    expect(reveal?.t).toBeGreaterThanOrEqual(twelfth.t);
+    expect(reveal?.t).toBeLessThanOrEqual(twelfth.t + 2);
+  });
+
+  it('is reachable well inside a first long session', () => {
+    expect(cycles.firstReshuffleAt).not.toBeNull();
+    // Measured on seeds 1..5: 1 h 43, 1 h 28, 2 h 18, 2 h 10, 1 h 53.
+    expect(cycles.firstReshuffleAt as number).toBeLessThanOrEqual(3 * 3600);
+    expect(cycles.reshuffles.length).toBeGreaterThanOrEqual(2);
+    expect(cycles.lifetimePermutations).toBeGreaterThanOrEqual(2);
+  });
+
+  it('spends Permutations on the Numbering ladder', () => {
+    expect(cycles.unlockedNumberings.length).toBeGreaterThanOrEqual(2);
+    expect(cycles.unlockedNumberings).toContain('natural');
+  });
+
+  /**
+   * THE reason layer 2 exists. Resetting `lifetimeCuts` costs nothing in Cut *cadence* — the Cut
+   * potential is scale-free, so the Cut multiplier cancels out of it (invariant #4) — so a
+   * Reshuffle can only pay for itself through what the seed and the permanent Constellation buy.
+   * If this fails, the seed (RESHUFFLE_SEED_PER_CYCLE) is the constant to move, in
+   * `economy/reshuffle.ts`, and the sim numbers there record the sweep.
+   */
+  it('is strictly worth entering: the second cycle outruns the first', () => {
+    const first = cycles.cycles[0];
+    const second = cycles.cycles[1];
+    expect(first).toBeDefined();
+    expect(second).toBeDefined();
+    if (!first || !second) return;
+
+    const target = first.cutsInCycle;
+    expect(target).toBeGreaterThan(0);
+    const firstTime = first.timeToCycleCuts(target);
+    const secondTime = second.timeToCycleCuts(target);
+    expect(firstTime).not.toBeNull();
+    expect(secondTime).not.toBeNull();
+    // Measured on seeds 1..5: 3054/3801/3604/5610/3363 s against 6228/5336/8291/7820/6815 s,
+    // i.e. the second cycle is 1.4x-2.3x faster to the same Cut count.
+    expect(secondTime as number).toBeLessThan(firstTime as number);
+  });
+
+  it('ends 8 engaged hours finite and far below 1e40', () => {
+    expect(Number.isFinite(cycles.lifetimeLog10)).toBe(true);
+    expect(Number.isFinite(cycles.finalRateLog10)).toBe(true);
+    // Measured: lifetimeShuffles ~ 1e16.5, deckRate ~ 1e11.5.
+    expect(cycles.lifetimeLog10).toBeLessThan(40);
+    expect(cycles.lifetimeLog10).toBeGreaterThan(6);
   });
 });

@@ -7,8 +7,9 @@
   import Cut from './panels/Cut.svelte';
   import Constellation from './panels/Constellation.svelte';
   import Deck from './panels/Deck.svelte';
+  import Permute from './panels/Permute.svelte';
   let { host }: { host: GameHost } = $props();
-  type Tab = 'upgrades' | 'deck' | 'cut' | 'stars' | 'ledger' | 'settings' | 'feel';
+  type Tab = 'upgrades' | 'deck' | 'cut' | 'stars' | 'permute' | 'ledger' | 'settings' | 'feel';
   let tab: Tab = $state('upgrades');
   const tabs = $derived.by((): { id: Tab; label: string; glow?: boolean }[] => {
     const t: { id: Tab; label: string; glow?: boolean }[] = [{ id: 'upgrades', label: 'Upgrades' }, { id: 'deck', label: 'Deck' }];
@@ -16,6 +17,7 @@
       t.push({ id: 'cut', label: 'Cut', glow: host.view.cut.canCut });
       t.push({ id: 'stars', label: 'Stars' });
     }
+    if (host.view.reshuffle.revealed) t.push({ id: 'permute', label: 'Permute', glow: host.view.reshuffle.can });
     t.push({ id: 'ledger', label: 'Ledger' }, { id: 'settings', label: 'Settings' }, { id: 'feel', label: 'Feel' });
     return t;
   });
@@ -32,6 +34,7 @@
     {:else if tab === 'deck'}<Deck {host} />
     {:else if tab === 'cut'}<Cut {host} />
     {:else if tab === 'stars'}<Constellation {host} />
+    {:else if tab === 'permute'}<Permute {host} />
     {:else if tab === 'ledger'}<Ledger {host} />
     {:else if tab === 'settings'}<Settings {host} />
     {:else}<FeelLab {host} />{/if}

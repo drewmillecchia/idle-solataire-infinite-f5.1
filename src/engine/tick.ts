@@ -7,6 +7,7 @@ import { D } from './numbers';
 import { derive } from './economy/derive';
 import { checkMilestones } from './economy/milestones';
 import { checkCutReveal } from './economy/prestige';
+import { checkReshuffleReveal } from './economy/reshuffle';
 import type { EventBus } from './events';
 import type { GameState } from './state';
 
@@ -27,6 +28,8 @@ export function step(state: GameState, dtSeconds: number, bus: EventBus): void {
   }
   checkMilestones(state, bus);
   checkCutReveal(state, d, bus);
+  // Layer 2's reveal is behavioural (cuts performed), so it costs a single integer compare.
+  checkReshuffleReveal(state, bus);
 }
 
 export interface OfflineResult {
