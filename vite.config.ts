@@ -3,6 +3,10 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { VitePWA } from 'vite-plugin-pwa';
 import { fileURLToPath, URL } from 'node:url';
 
+/** `/api/*` → the save server on 3001 (docs/07), so the iPad talks to one origin. */
+const API_PORT = process.env.ISI_API_PORT ?? '3001';
+const API_PROXY = { '/api': { target: `http://127.0.0.1:${API_PORT}`, rewrite: (p: string) => p.replace(/^\/api/, '') } };
+
 export default defineConfig({
   plugins: [
     svelte(),
@@ -35,6 +39,7 @@ export default defineConfig({
       $content: fileURLToPath(new URL('./src/content', import.meta.url))
     }
   },
-  server: { host: '0.0.0.0', port: 3000, strictPort: true, proxy: { '/api': 'http://127.0.0.1:3001' } },
+  server: { host: '0.0.0.0', port: 3000, strictPort: true, proxy: API_PROXY },
+  preview: { proxy: API_PROXY },
   build: { target: 'es2022', sourcemap: true }
 });

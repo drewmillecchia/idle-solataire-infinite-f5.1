@@ -24,7 +24,7 @@ export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; nvm use 22 >/dev/null
 | `npm run sim -- <hours> [profile]` | Headless balance sim on the real engine |
 | `npm run shot` | Screenshot the running dev server at 1180×820 → `tools/out/` |
 | `npm run build` | Type-check + production PWA build |
-| `npm run server` | Hono save API on 3001 (M7+) |
+| `npm run server` | Hono + SQLite save API on 3001 (`server/`); Vite proxies `/api` to it. Opt-in in Settings → Cloud save |
 
 Headless Chromium: `~/.cache/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-linux64/chrome-headless-shell`
 (installed by a sibling repo; `tools/` scripts point at it). LAN address of this WSL box changes; the
@@ -100,5 +100,7 @@ docs/  brainstorming/  memory/  .claude/{agents,skills}
   bigint 52! odometer (`engine/permutation.ts`, `journeyFraction` is THE progress number), Gambler roll in
   derive, save v4. Permute panel + ladder shapes + odometer footer in the UI. 349 tests.
 - **Review pass done** (20 confirmed findings fixed; see `memory/lessons.md`).
+- **M7 Stage 1 done** — `server/` (Hono, `SaveStore` seam, SQLite now / DynamoDB stub), `platform/cloud.ts`,
+  host syncs boot/30 s/hide with the greater-progress conflict rule. 354 tests + `tools/cloud-probe.mjs`.
 - Open: Scholar's winnable deals (solver worker), Gambler Mark fizzle, Golf/Pyramid feel pass on iPad, M6 sound
-  polish + Idle Riffle, M7 server.
+  polish + Idle Riffle, DynamoDB store + real auth.

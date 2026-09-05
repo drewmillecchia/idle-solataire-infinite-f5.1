@@ -24,7 +24,8 @@ import { MILESTONES, FEEL, MARKS, type Feel } from '$content/index';
 import { WAYS } from '$content/ways';
 import type { WayId, NumberingId } from '$engine/types';
 import type { Table, TableHost } from '../table/Table';
-import { loadSave, persistSave, requestPersistence, clearSaves } from '../platform/storage';
+import { loadSave, persistSave, requestPersistence, clearSaves, cmpProgress } from '../platform/storage';
+import { createCloudClient, resolveConflict, type CloudClient } from '../platform/cloud';
 import { sound, haptic, unlockAudio } from '../audio/presenters';
 
 export interface Ledger {
@@ -59,6 +60,7 @@ export interface View {
   wonBanner: { burst: string } | null;
   lastGesture: string;
   storageWarning: boolean;
+  cloud: { enabled: boolean; status: string };
   cut: {
     revealed: boolean;
     canCut: boolean;
@@ -175,6 +177,7 @@ export class GameHost implements TableHost {
     document.addEventListener('visibilitychange', this.onVisibility);
     window.addEventListener('pagehide', () => void this.save());
     this.pushView();
+    if (this.state.settings.cloud) { this.cloudStatus = 'connecting'; void this.cloudSync('boot'); }
   }
 
   /** The ledger is derived from persisted state (milestones passed, cuts made), never stored itself. */
@@ -204,6 +207,7 @@ export class GameHost implements TableHost {
   private onVisibility = (): void => {
     if (document.visibilityState === 'hidden') {
       void this.save();
+      void this.cloudSync('hide');
     } else {
       const gone = (Date.now() - this.state.lastSeenAt) / 1000;
       if (gone > 0) {
@@ -235,7 +239,7 @@ export class GameHost implements TableHost {
     this.state.lastSeenAt = Date.now();
     if (n > 0) { visibleUpgrades(this.state, this.bus); availableMarks(this.state, this.bus); }
     this.saveTimer += dt;
-    if (this.saveTimer > 5) { this.saveTimer = 0; void this.save(); }
+    if (this.saveTimer > 5) { this.saveTimer = 0; void this.save(); void this.cloudSync('autosave'); }
     this.snapTimer += dt;
     if (this.snapTimer > 0.1) { this.snapTimer = 0; this.pushView(); }
     this.dealerTick(dt);
@@ -252,6 +256,62 @@ export class GameHost implements TableHost {
     }
   }
   private storageWarning = false;
+  private cloud: CloudClient = createCloudClient({ baseUrl: '/api' });
+  private cloudStatus = 'off';
+  private cloudLastPush = 0;
+  private cloudBusy = false;
+
+  /**
+   * Cloud tier (docs/07): never blocks play, never throws. On a 409 the greater `lifetimeShuffles`
+   * wins; a tie adopts the server copy. Pushes are rate-limited to one per 30 s except on hide.
+   */
+  async cloudSync(reason: 'boot' | 'autosave' | 'hide' | 'manual'): Promise<void> {
+    if (!this.state.settings.cloud || this.cloudBusy) return;
+    if (reason === 'autosave' && Date.now() - this.cloudLastPush < 30_000) return;
+    this.cloudBusy = true;
+    try {
+      const local = { blob: serialize(this.state), progress: this.state.lifetimeShuffles.toString(), schemaVersion: this.state.version };
+      if (reason === 'boot') {
+        const server = await this.cloud.pull();
+        if (server && resolveConflict(local.progress, server, cmpProgress) === 'adopt') {
+          this.adoptBlob(server.blob);
+          this.cloudStatus = 'restored from the cloud';
+          this.cloudLastPush = Date.now();
+          return;
+        }
+      }
+      const r = await this.cloud.push(local);
+      if (r.ok) { this.cloudStatus = `synced ${new Date().toLocaleTimeString()}`; this.cloudLastPush = Date.now(); }
+      else if ('conflict' in r) {
+        if (resolveConflict(local.progress, r.conflict, cmpProgress) === 'adopt') { this.adoptBlob(r.conflict.blob); this.cloudStatus = 'adopted the further-along cloud save'; }
+        else { const again = await this.cloud.push(local); this.cloudStatus = again.ok ? `synced ${new Date().toLocaleTimeString()}` : 'conflict; will retry'; }
+        this.cloudLastPush = Date.now();
+      } else this.cloudStatus = `offline (${r.error})`;
+    } catch (e) {
+      this.cloudStatus = 'offline';
+      console.warn('cloud sync failed', e);
+    } finally {
+      this.cloudBusy = false;
+      this.pushView();
+    }
+  }
+  private adoptBlob(blob: string): void {
+    const st = deserialize(blob);
+    if (!Array.isArray(st.cards) || st.cards.length < 52) return;
+    this.state = st;
+    this.reattachMarks();
+    this.derived = derive(st);
+    this.rebuildLedger();
+    this.newHand(true);
+    void this.save();
+  }
+  setCloud(on: boolean): void {
+    this.state.settings.cloud = on;
+    this.cloudStatus = on ? 'connecting' : 'off';
+    this.pushView();
+    void this.save();
+    if (on) void this.cloudSync('manual');
+  }
   /** Lists (upgrades, constellation, deck, marks, numbering, ways) rebuild only when flagged or every 500 ms. */
   private slowDirty = true;
   private slowBuiltAt = 0;
@@ -606,7 +666,7 @@ export class GameHost implements TableHost {
     return {
       revision: 0, shuffles: '0', lifetime: '0', rate: '0/s', awake: 0, cutsPerformed: 0, handsWon: 0, handsPlayed: 0,
       moves: 0, won: false, stuck: false, canUndo: false, dealerActive: false, dealerUnlocked: false, dealerCountdown: 0,
-      nextMilestoneLabel: '', nextMilestoneProgress: 0, journey: 0, ledger: [], toasts: [], upgrades: [], offline: null, wonBanner: null, lastGesture: '', storageWarning: false,
+      nextMilestoneLabel: '', nextMilestoneProgress: 0, journey: 0, ledger: [], toasts: [], upgrades: [], offline: null, wonBanner: null, lastGesture: '', storageWarning: false, cloud: { enabled: false, status: 'off' },
       cut: { revealed: false, canCut: false, cutsOnCut: '0', progress: 0, potential: '0', runEarned: '0', threshold: '0', cuts: '0', lifetimeCuts: '0', cutsPerformed: 0, way: 'none', ways: [], cutting: false },
       constellation: [],
       reshuffle: { revealed: false, can: false, onReshuffle: '0', progress: 0, cycleCuts: '0', threshold: '0', permutations: '0', lifetimePermutations: '0', reshuffles: 0 },
@@ -614,7 +674,7 @@ export class GameHost implements TableHost {
       odometer: '0',
       deck: [],
       marks: { slots: 0, used: 0, available: [], placed: [], picking: null, canPlace: false },
-      gameId: 'klondike', gameName: 'Klondike', games: [], gameOptions: [], settings: { sound: true, haptics: true, reducedMotion: false, autoDealerDelaySeconds: 12, shuffleStyle: 'riffle' }
+      gameId: 'klondike', gameName: 'Klondike', games: [], gameOptions: [], settings: { sound: true, haptics: true, reducedMotion: false, autoDealerDelaySeconds: 12, shuffleStyle: 'riffle', cloud: false }
     };
   }
 
@@ -693,6 +753,7 @@ export class GameHost implements TableHost {
       offline: this.offlineNotice,
       wonBanner: this.wonBanner,
       storageWarning: this.storageWarning,
+      cloud: { enabled: s.settings.cloud, status: this.cloudStatus },
       cut: {
         revealed: s.revealed.includes('cut') || s.prestige.cutsPerformed > 0,
         canCut: canCut(s, d) && !this.cutting,

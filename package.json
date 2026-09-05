@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "test:browser": "node tools/run-browser-tests.mjs",
     "sim": "vite-node sim/cli.ts",
-    "shot": "node tools/shot.mjs"
+    "shot": "node tools/shot.mjs",
+    "server": "npm --prefix server run dev"
   },
   "dependencies": {
     "break_eternity.js": "^2.1.3",

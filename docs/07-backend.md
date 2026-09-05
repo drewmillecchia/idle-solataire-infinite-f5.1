@@ -1,5 +1,9 @@
 # Cloud save
 
+**Status (2026-09-05): Stage 1 shipped.** `server/` runs Hono on Node with `node:sqlite`; `src/platform/cloud.ts`
+is the client tier; the host syncs on boot, every 30 s while playing, and on hide, opt-in via Settings → Cloud save.
+Vite proxies `/api/*` → `http://127.0.0.1:3001/*` so the iPad talks to one origin. Start it with `npm run server`.
+
 Low priority; server-side save is the *only* capability wanted now. Designed so that Stage 1 (Node +
 SQLite on the LAN) and Stage 2 (Lambda + DynamoDB) share every line except a storage adapter.
 

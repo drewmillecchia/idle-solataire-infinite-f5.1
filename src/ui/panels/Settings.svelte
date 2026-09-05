@@ -34,6 +34,10 @@
   </label>
 
   <div class="block">
+    <label class="row"><span>Cloud save</span><input type="checkbox" checked={host.view.cloud.enabled} onchange={(e) => host.setCloud((e.currentTarget as HTMLInputElement).checked)} /></label>
+    <p class="hint">{host.view.cloud.enabled ? host.view.cloud.status : 'Keeps a copy on the save server and restores the further-along one. Local storage stays the truth.'}</p>
+  </div>
+  <div class="block">
     <button class="link" onclick={() => (exported = host.exportSave())}>Export save</button>
     {#if exported}<textarea readonly rows="3" value={exported}></textarea>{/if}
   </div>

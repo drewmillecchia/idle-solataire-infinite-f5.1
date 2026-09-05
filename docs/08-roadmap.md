@@ -46,7 +46,7 @@ non-obvious. Status is kept here and in `CLAUDE.md`.
 - TriPeaks as the contract proof; game browser.
 - **Exit:** no edits under `table/` were needed for TriPeaks; sounds scale with velocity.
 
-## M7 — Cloud save
+## M7 — Cloud save ✅ (2026-09-05, Stage 1: Hono + SQLite, opt-in client tier)
 - `server/` Hono + SQLite; session, GET/PUT with 409, history; client cloud tier with backoff.
 - **Exit:** two browsers converge on the further-along save; killing the server changes nothing visible.
 

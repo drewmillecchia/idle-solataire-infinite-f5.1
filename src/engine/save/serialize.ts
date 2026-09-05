@@ -262,7 +262,8 @@ function repairSettings(value: unknown, fallback: SettingsState): SettingsState 
     haptics: toBool(value.haptics, fallback.haptics),
     reducedMotion: toBool(value.reducedMotion, fallback.reducedMotion),
     autoDealerDelaySeconds: toNum(value.autoDealerDelaySeconds, fallback.autoDealerDelaySeconds),
-    shuffleStyle: style
+    shuffleStyle: style,
+    cloud: toBool(value.cloud, fallback.cloud)
   };
 }
 

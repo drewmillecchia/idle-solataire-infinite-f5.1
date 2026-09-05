@@ -80,6 +80,8 @@ export interface SettingsState {
   reducedMotion: boolean;
   autoDealerDelaySeconds: number;
   shuffleStyle: 'riffle' | 'overhand' | 'random';
+  /** Opt-in cloud save (docs/07). Off by default: local storage is the truth, the network an optimisation. */
+  cloud: boolean;
 }
 
 export interface StatsState {
@@ -156,7 +158,8 @@ export function createInitialState(now: number): GameState {
       haptics: true,
       reducedMotion: false,
       autoDealerDelaySeconds: 12,
-      shuffleStyle: 'riffle'
+      shuffleStyle: 'riffle',
+      cloud: false
     },
     stats: {
       totalHomed: 0,
