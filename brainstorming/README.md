@@ -9,3 +9,4 @@ rarely; date entries.
 - [games-and-minigames.md](games-and-minigames.md) — variants and toys
 - [look-and-sound.md](look-and-sound.md) — visual and ASMR ideas
 - [wacky.md](wacky.md) — the ones we're slightly embarrassed by
+- [inbox-2026-09-06.md](inbox-2026-09-06.md) — Drew's play-session notes, uncategorised
