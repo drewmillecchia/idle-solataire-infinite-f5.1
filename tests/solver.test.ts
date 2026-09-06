@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cardId, type CardId } from '$engine/types';
+import { deckCardIds, JOKER_53, JOKER_ID } from '$engine/deck';
 import { NO_TWISTS, type Twists } from '../src/rules/module';
 import { dealKlondike, klondike, type KlondikeBoard } from '../src/rules/games/klondike';
 import {
@@ -25,6 +26,7 @@ function board(p: Partial<KlondikeBoard> = {}): KlondikeBoard {
     redealsLeft: -1,
     moves: 0,
     glass: [],
+    dealt: 52,
     ...p
   };
 }
@@ -145,6 +147,24 @@ describe('twists', () => {
     const r = solveKlondike(start, { twists: wildJack });
     expect(r.result).toBe('won');
     expect(klondike.isWon(replay(start, r.line ?? [], wildJack))).toBe(true);
+  });
+});
+
+describe('a deck with a rankless card', () => {
+  it('solves a 53-card deal and replays it to a real win, the Joker crowning a finished pile', () => {
+    // Seed 10 is a deal the solver cracks in a few milliseconds; the point is not the seed but
+    // that the whole 53-card loop closes — deal, rules, solver, replay, win check — and that the
+    // winning position is 14/13/13/13, i.e. every card home with the Joker on top of a complete
+    // foundation. Before that rule existed, four foundations held 52 places for 53 cards and this
+    // was unwinnable by construction (docs/12-ascension.md).
+    const start = dealKlondike(10, {}, NO_TWISTS, deckCardIds(JOKER_53));
+    expect(start.dealt).toBe(53);
+    const r = solveKlondike(start, { budgetNodes: 300_000 });
+    expect(r.result).toBe('won');
+    const end = replay(start, r.line ?? []);
+    expect(klondike.isWon(end)).toBe(true);
+    expect(end.foundations.map((f) => f.length).sort((a, b) => b - a)).toEqual([14, 13, 13, 13]);
+    expect(end.foundations.flat()).toContain(JOKER_ID);
   });
 });
 

@@ -2,13 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { cardId } from '$engine/types';
 import type { CardId } from '$engine/types';
 import { mulberry32 } from '$engine/rng';
-import { NO_TWISTS, type Twists } from '../src/rules/module';
+import { deckCardIds, STANDARD_52, JOKER_53, JOKER_ID } from '$engine/deck';
+import { NO_TWISTS, isWildCard, type Twists } from '../src/rules/module';
 import {
   dealKlondike,
   klondike,
   legalMoves,
   type KlondikeBoard
 } from '../src/rules/games/klondike';
+
+const STANDARD_IDS = deckCardIds(STANDARD_52);
 
 // --- fixtures ---------------------------------------------------------------
 
@@ -22,6 +25,7 @@ function board(p: Partial<KlondikeBoard> = {}): KlondikeBoard {
     redealsLeft: -1,
     moves: 0,
     glass: [],
+    dealt: 52,
     ...p
   };
 }
@@ -86,9 +90,25 @@ describe('deal', () => {
   });
 
   it('deals through the module with a raw rng', () => {
-    const b = klondike.deal(mulberry32(5), { draw: '3' }, NO_TWISTS);
+    const b = klondike.deal(mulberry32(5), { draw: '3' }, NO_TWISTS, STANDARD_IDS);
     expect(b.drawCount).toBe(3);
     expect(b.stock).toHaveLength(24);
+  });
+
+  it('deals a 53-card (Joker) deck too: every card lands, `dealt` tracks it (docs/12)', () => {
+    const b = klondike.deal(mulberry32(5), {}, NO_TWISTS, deckCardIds(JOKER_53));
+    const all: CardId[] = [
+      ...b.stock,
+      ...b.waste,
+      ...b.foundations.flat(),
+      ...b.tableau.flatMap((c) => [...c.down, ...c.up])
+    ];
+    expect(all).toHaveLength(53);
+    expect(new Set(all).size).toBe(53);
+    expect(all).toContain(JOKER_ID);
+    expect(b.dealt).toBe(53);
+    expect(b.stock).toHaveLength(25); // 53 - 28 dealt to the tableau
+    expect(klondike.isWon(b)).toBe(false);
   });
 });
 
@@ -327,6 +347,46 @@ describe('twists', () => {
     expect(klondike.legalTargets(b, 'waste', 0, t)).toContain('t1');
   });
 
+  it('the Joker: wild by nature, even under NO_TWISTS (docs/12-ascension.md)', () => {
+    expect(isWildCard(JOKER_ID, NO_TWISTS)).toBe(true);
+
+    // Lands on any tableau top regardless of rank or colour, exactly like a Mark-made wild card
+    // and without a twist saying so...
+    const b = board({
+      waste: [JOKER_ID],
+      foundations: [[S(1), S(2)], [], [], []],
+      tableau: cols([{ up: [S(5)] }, { up: [H(9)] }])
+    });
+    const targets = klondike.legalTargets(b, 'waste', 0, NO_TWISTS);
+    expect(targets).toEqual(expect.arrayContaining(['t0', 't1']));
+    // ... but NOT onto a half-built foundation. A card with no rank of its own cannot stand in for
+    // a rank: doing so would occupy that rank's slot and strand the real card of it forever, which
+    // greedy autoplay would walk straight into.
+    expect(targets).not.toContain('f0');
+    expect(targets).not.toContain('f1');
+
+    // It crowns a foundation that is already complete — the one place a 53rd card can go home.
+    const complete = board({
+      waste: [JOKER_ID],
+      foundations: [Array.from({ length: 13 }, (_, i) => S(i + 1)), [], [], []],
+      tableau: cols([{ up: [S(5)] }])
+    });
+    expect(klondike.legalTargets(complete, 'waste', 0, NO_TWISTS)).toContain('f0');
+    const crowned = klondike.move(complete, 'waste', 0, 'f0', NO_TWISTS);
+    expect(crowned.changed).toBe(true);
+    expect(crowned.board.foundations[0]).toHaveLength(14);
+    expect(crowned.homed).toEqual([JOKER_ID]);
+    // And nothing else may sit on top of it afterwards.
+    expect(klondike.legalTargets(crowned.board, 't0', 0, NO_TWISTS)).not.toContain('f0');
+
+    const moved = klondike.move(b, 'waste', 0, 't0', NO_TWISTS);
+    expect(moved.changed).toBe(true);
+    expect(moved.board.tableau[0]?.up).toEqual([S(5), JOKER_ID]);
+
+    // Anything now lands on the Joker sitting atop t0, regardless of rank or colour.
+    expect(klondike.legalTargets(moved.board, 't1', 0, NO_TWISTS)).toContain('t0');
+  });
+
   it('mirror: counts as both colours, either way round', () => {
     const mirror = C(4);
     const t = twistsWith({ isMirror: (c) => c === mirror });
@@ -341,7 +401,7 @@ describe('twists', () => {
 
   it('glass: dealt-face-up cards stay visible while face-down in the tableau', () => {
     const all = twistsWith({ dealtFaceUp: () => true });
-    const b = klondike.deal(mulberry32(3), {}, all);
+    const b = klondike.deal(mulberry32(3), {}, all, STANDARD_IDS);
     expect(b.glass).toHaveLength(21); // every face-down tableau card
     expect(new Set(b.glass).size).toBe(21);
 
@@ -352,7 +412,7 @@ describe('twists', () => {
     expect(t6.pickableFrom).toBe(6); // still only the real face-up card is pickable
 
     // Without the twist the same positions read as face-down.
-    const plain = klondike.deal(mulberry32(3), {}, NO_TWISTS);
+    const plain = klondike.deal(mulberry32(3), {}, NO_TWISTS, STANDARD_IDS);
     expect(plain.glass).toEqual([]);
     expect(pileView(plain, 't6').cards.filter((c) => c.faceUp)).toHaveLength(1);
 
@@ -415,6 +475,23 @@ describe('winning', () => {
     expect(r.won).toBe(true);
     expect(r.homed).toEqual([C(13)]);
     expect(klondike.isWon(r.board)).toBe(true);
+  });
+
+  it('wins when every DEALT card is home, not when foundations hit a hardcoded 52', () => {
+    // A hand smaller than 52 (a future, smaller deck shape): 3 dealt, one 3-card suit run.
+    const small = board({ foundations: [[S(1), S(2), S(3)], [], [], []], dealt: 3 });
+    expect(klondike.isWon(small)).toBe(true);
+
+    // A hand bigger than 52 (the Joker, docs/12): all four foundations holding a full 13-run
+    // apiece is 52 cards home, but the 53rd dealt card (the Joker) is still on the table, so the
+    // hand is not won. `foundations.every(f => f.length === 13)` would have said otherwise.
+    const withJoker = board({
+      foundations: [full('S'), full('H'), full('D'), full('C')],
+      waste: [JOKER_ID],
+      dealt: 53
+    });
+    expect(withJoker.foundations.every((f) => f.length === 13)).toBe(true);
+    expect(klondike.isWon(withJoker)).toBe(false);
   });
 
   it('knows when it is stuck', () => {

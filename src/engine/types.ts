@@ -2,21 +2,30 @@
  * Core engine types. PURE: no DOM, no Svelte, no Pixi. See CLAUDE.md invariants.
  */
 import type Decimal from 'break_eternity.js';
-import { STANDARD_52, cardDefIn, deckCards } from './deck';
+import { STANDARD_52, cardDefAnywhere, deckCards } from './deck';
 
+/** The four suits value is made of. Ascension appends Stars and Moons here (docs/12). */
 export type Suit = 'S' | 'H' | 'D' | 'C';
 export const SUITS: readonly Suit[] = ['S', 'H', 'D', 'C'];
-/** Rank 1 = Ace … 13 = King. */
+/**
+ * The suit slot on a card. 'J' is "belongs to no suit" — the Joker. Anything that indexes BY suit
+ * (a suit multiplier, a per-suit total) takes `Suit` and must decide what an unsuited card does;
+ * `isSuited` is that check, and the answer so far is always "it sits out".
+ */
+export type CardSuit = Suit | 'J';
+/** Rank 1 = Ace ... 13 = King. */
 export type Rank = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
 export const RANKS: readonly Rank[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
+/** The rank slot on a card. 0 is "has no rank of its own" — the Joker again. */
+export type CardRank = Rank | 0;
 
-/** Stable card identity 0..51: suitIndex*13 + (rank-1). Ascension decks extend past 51. */
+/** Stable card identity: an index into the card universe in `deck.ts`. 0..51 is the standard deck. */
 export type CardId = number;
 
 export interface CardDef {
   id: CardId;
-  suit: Suit;
-  rank: Rank;
+  suit: CardSuit;
+  rank: CardRank;
 }
 
 /**
@@ -27,14 +36,18 @@ export function cardId(suit: Suit, rank: Rank): CardId {
   return SUITS.indexOf(suit) * 13 + (rank - 1);
 }
 /**
- * STANDARD DECK ONLY: the inverse of `cardId`, now a lookup into `STANDARD_52` rather than
- * `id / 13` arithmetic. Shape-aware code should use `cardDefIn` from `./deck` instead.
+ * The card with this id, from the universe every deck shape is a prefix of — so this answers for
+ * the Joker too, not only for 0..51. Use `cardDefIn` when you need "and it must be in THIS deck".
  */
 export function cardDef(id: CardId): CardDef {
-  return cardDefIn(STANDARD_52, id);
+  return cardDefAnywhere(id);
 }
-export function isRed(suit: Suit): boolean {
+export function isRed(suit: CardSuit): boolean {
   return suit === 'H' || suit === 'D';
+}
+/** Narrows off the unsuited cards (the Joker), so `Record<Suit, ...>` indexing stays honest. */
+export function isSuited(suit: CardSuit): suit is Suit {
+  return suit !== 'J';
 }
 export const STANDARD_DECK: readonly CardDef[] = deckCards(STANDARD_52);
 

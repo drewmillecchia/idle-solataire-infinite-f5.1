@@ -20,15 +20,18 @@
  *  - mirror : the card counts as both colours, so it stacks either way in the tableau.
  *  - glass  : irrelevant — every card is dealt face-up already.
  */
-import { cardDef, isRed, STANDARD_DECK } from '$engine/types';
+import { cardDef, isRed } from '$engine/types';
 import type { CardId } from '$engine/types';
+import { deckCardIds, STANDARD_52 } from '$engine/deck';
 import { mulberry32, shuffle } from '$engine/rng';
 import {
   noop,
   optionValue,
+  isWildCard,
   NO_TWISTS,
   FAN_UP,
   type BoardView,
+  type DealDeck,
   type GameConfig,
   type GameModule,
   type GameOption,
@@ -45,6 +48,8 @@ export interface FreeCellBoard {
   /** Eight tableau columns, all face-up; the TOP (only naturally pickable card) is the LAST element. */
   tableau: CardId[][];
   moves: number;
+  /** How many cards this hand was dealt — the board's deck may not be the standard 52 (docs/12). */
+  dealt: number;
 }
 
 export const FREECELL_TABLEAU_COUNT = 8;
@@ -118,7 +123,7 @@ function colourOk(upper: CardId, lower: CardId, twists: Twists): boolean {
 
 /** May `lower` sit directly on `upper` in a tableau run (one rank down, alternating colour)? */
 function runPairOk(upper: CardId, lower: CardId, twists: Twists): boolean {
-  if (twists.isWild(upper) || twists.isWild(lower)) return true;
+  if (isWildCard(upper, twists) || isWildCard(lower, twists)) return true;
   if (cardDef(lower).rank !== cardDef(upper).rank - 1) return false;
   return colourOk(upper, lower, twists);
 }
@@ -132,11 +137,18 @@ function runPairOk(upper: CardId, lower: CardId, twists: Twists): boolean {
  */
 function foundationAccepts(pile: readonly CardId[], card: CardId, twists: Twists): boolean {
   const need = pile.length + 1;
+  // A card with NO RANK OF ITS OWN (the Joker) cannot stand in for one: it crowns a foundation
+  // that is already complete, and that is its only way home. Two reasons, both load-bearing.
+  // Capacity: four foundations hold 52 ranks, so a 53-card deck needs somewhere for the extra card
+  // to go (docs/12-ascension.md). Safety: a rankless card played as a stand-in would occupy a rank
+  // slot and strand the real card of that rank forever — and greedy autoplay, which homes whatever
+  // it can, would do exactly that on the first hand.
+  if (cardDef(card).rank === 0) return pile.length === 13;
+  if (isWildCard(card, twists)) return need <= 13;
   if (need > 13) return false;
-  if (twists.isWild(card)) return true;
   const def = cardDef(card);
   if (def.rank !== need) return false;
-  const anchor = pile.find((c) => !twists.isWild(c));
+  const anchor = pile.find((c) => !isWildCard(c, twists));
   if (anchor === undefined) return true;
   return cardDef(anchor).suit === def.suit;
 }
@@ -233,7 +245,8 @@ function cloneBoard(board: FreeCellBoard): FreeCellBoard {
     cells: board.cells.slice(),
     foundations: board.foundations.map((f) => f.slice()),
     tableau: board.tableau.map((c) => c.slice()),
-    moves: board.moves
+    moves: board.moves,
+    dealt: board.dealt
   };
 }
 
@@ -245,16 +258,14 @@ function cellsCountOf(config: GameConfig | undefined): number {
   return Number.isFinite(n) && n > 0 ? n : 4;
 }
 
-function dealWith(rng: () => number, config: GameConfig, _twists: Twists): FreeCellBoard {
-  const deck = shuffle(
-    STANDARD_DECK.map((c) => c.id),
-    rng
-  );
+function dealWith(rng: () => number, config: GameConfig, _twists: Twists, deck: DealDeck): FreeCellBoard {
+  const shuffled = shuffle(deck, rng);
   // Classic round-robin deal: card k goes to column k % 8, so columns 0-3 (52 mod 8 = 4 of them)
-  // pick up the extra card — 7 cards each — and columns 4-7 get 6.
+  // pick up the extra card — 7 cards each — and columns 4-7 get 6. A larger deck (docs/12) simply
+  // rides the same round-robin: every card handed in lands on some column.
   const tableau: CardId[][] = Array.from({ length: FREECELL_TABLEAU_COUNT }, () => []);
-  for (let k = 0; k < deck.length; k++) {
-    const card = deck[k];
+  for (let k = 0; k < shuffled.length; k++) {
+    const card = shuffled[k];
     const col = tableau[k % FREECELL_TABLEAU_COUNT];
     if (card !== undefined && col) col.push(card);
   }
@@ -263,13 +274,19 @@ function dealWith(rng: () => number, config: GameConfig, _twists: Twists): FreeC
     cells: Array.from({ length: cellCount }, () => null),
     foundations: [[], [], [], []],
     tableau,
-    moves: 0
+    moves: 0,
+    dealt: shuffled.length
   };
 }
 
-/** Convenience for tests, the sim and bug reports: a seeded FreeCell deal. */
-export function dealFreeCell(seed: number, config?: GameConfig, twists?: Twists): FreeCellBoard {
-  return dealWith(mulberry32(seed), config ?? {}, twists ?? NO_TWISTS);
+/** Convenience for tests, the sim and bug reports: a seeded FreeCell deal off the standard 52. */
+export function dealFreeCell(
+  seed: number,
+  config?: GameConfig,
+  twists?: Twists,
+  deck?: DealDeck
+): FreeCellBoard {
+  return dealWith(mulberry32(seed), config ?? {}, twists ?? NO_TWISTS, deck ?? deckCardIds(STANDARD_52));
 }
 
 // ------------------------------------------------------------------- view ---
@@ -409,10 +426,15 @@ function doMove(
 
 // ------------------------------------------------------------- state tests ---
 
+/**
+ * Won when every dealt card is home — see the equivalent comment on `isWonBoard` in
+ * games/klondike.ts for why this isn't `foundations.every(f => f.length === 13)`, and how a card
+ * with no rank of its own gets home at all.
+ */
 function isWonBoard(board: FreeCellBoard): boolean {
-  return (
-    board.foundations.length === FREECELL_FOUNDATION_COUNT && board.foundations.every((f) => f.length === 13)
-  );
+  if (board.foundations.length !== FREECELL_FOUNDATION_COUNT) return false;
+  const home = board.foundations.reduce((sum, f) => sum + f.length, 0);
+  return home === board.dealt;
 }
 
 /** Every legal move on the board (there is no draw in FreeCell). Useful for tests and autoplay. */
@@ -447,8 +469,9 @@ function stuck(board: FreeCellBoard, twists: Twists): boolean {
 }
 
 function hashBoard(board: FreeCellBoard): string {
-  // `moves` is deliberately excluded: the hash identifies a POSITION, so autoplay's cycle
-  // detection works.
+  // `moves` and `dealt` are deliberately excluded: the hash identifies a POSITION, so autoplay's
+  // cycle detection works, and `dealt` is fixed at deal time — identical across every position
+  // reachable from one deal, so it could never help distinguish two of them.
   const c = board.cells.map((x) => (x === null || x === undefined ? '-' : x)).join('.');
   const f = board.foundations.map((x) => x.join('.')).join('/');
   const t = board.tableau.map((x) => x.join('.')).join('/');
@@ -464,8 +487,8 @@ export const freecell: GameModule<FreeCellBoard> = {
   options: OPTIONS,
   honours: ['wild', 'mirror'],
 
-  deal(rng, config, twists) {
-    return dealWith(rng, config, twists);
+  deal(rng, config, twists, deck) {
+    return dealWith(rng, config, twists, deck);
   },
 
   view(board) {

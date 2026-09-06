@@ -77,7 +77,7 @@ docs/  brainstorming/  memory/  .claude/{agents,skills}
 - Log lessons in `memory/lessons.md`; log tuning sessions in `memory/tuning-log.md`.
 - Tone in UI copy: dry, warm, short. No exclamation marks in the ledger. No emoji in code or UI.
 
-## Status (2026-09-05, end of session 1)
+## Status (2026-09-06, end of session 5)
 - **M0 done** — docs, handbook, agents/skills, Vite 8 + Svelte 5 + Pixi 8 scaffold, Night Desk shell, Feel Lab.
 - **M1 done** — pure engine: numbers, 7 numbering systems (normalised), cards-as-generators, one-pass
   `derive`, 20 Hz `step` + `applyOffline` (reuses step), save v1 (defensive, migrations), run upgrades +
@@ -115,7 +115,12 @@ docs/  brainstorming/  memory/  .claude/{agents,skills}
   The tier-2 upgrades are decisions rather than more of the same (Comeback pays *more* when little is awake;
   Underdog Suits and Favored Suit pull against each other; Fresh Cards pulls against Patience). Every capped
   upgrade maxes at 49–71 simulated minutes, asserted at a 40-minute floor in `tests/balance.test.ts`.
-- **Deck size is data, not an assumption** — `engine/deck.ts` (`DeckShape`, `deckSize`, `deckCards`,
-  `cardDefIn`), `state.deck` holds a shape id, save v7. One shape exists (the standard 52) and behaviour is
-  unchanged. This is step 1 of `docs/12-ascension.md`, which now lists exactly what step 2 costs.
-- Open: Ascension steps 2–3, DynamoDB store + real auth, sound *samples*, a Lighthouse pass.
+- **The deck is data** (`docs/12-ascension.md` steps 1–2, ADR-015). One append-only **card universe**;
+  every `DeckShape` is a **prefix** of it, so a card id means the same card in every shape and a Mark
+  survives a change of deck. `JOKER_53` exists; a card can have no suit (`CardSuit = Suit | 'J'`) and no
+  rank (`CardRank = Rank | 0`), and every place that indexes by either says what it does about that.
+  A game is **handed its cards**: `deal(rng, config, twists, deck)`. `isWildCard` makes the Joker wild
+  by nature in every game; a **rankless card crowns a completed foundation**, which is how a 53rd card
+  gets home in Klondike and FreeCell. Save v7 unchanged.
+- Open: Ascension step 3 (`performAscend`, the ceremony), DynamoDB store + real auth, sound *samples*,
+  a Lighthouse pass. Drew's play notes are in `brainstorming/inbox-2026-09-06.md`.

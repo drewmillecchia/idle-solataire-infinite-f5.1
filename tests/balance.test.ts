@@ -14,6 +14,7 @@ import {
 } from '$engine/index';
 import { EventBus } from '$engine/events';
 import { mulberry32 } from '$engine/rng';
+import { deckCardIds, STANDARD_52 } from '$engine/deck';
 import { NO_TWISTS } from '$rules/module';
 import { gameById } from '$rules/registry';
 import { nextMove } from '$rules/autoplay';
@@ -81,7 +82,7 @@ function simulateSingleRunPurchases(minutes: number, seed = 1): { purchaseTimes:
   const state = createInitialState(0);
   const rng = mulberry32(seed);
   const game = gameById('klondike')!;
-  let board: unknown = game.deal(rng, {}, NO_TWISTS);
+  let board: unknown = game.deal(rng, {}, NO_TWISTS, deckCardIds(STANDARD_52));
   let seen = new Set<string>();
   dealHand(state, bus, 'klondike', 0);
 
@@ -97,7 +98,7 @@ function simulateSingleRunPurchases(minutes: number, seed = 1): { purchaseTimes:
   let handStart = 0;
 
   const newHand = () => {
-    board = game.deal(rng, {}, NO_TWISTS);
+    board = game.deal(rng, {}, NO_TWISTS, deckCardIds(STANDARD_52));
     seen = new Set();
     dealHand(state, bus, 'klondike', 0);
     handStart = t;

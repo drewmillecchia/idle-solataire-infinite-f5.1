@@ -23,7 +23,7 @@
 import { ECONOMY, MARKS } from '$content/index';
 import { chargeCard, homeSpark, spark, wakeCard } from '../economy/cards';
 import { mulberry32 } from '../rng';
-import { cardDef, cardId } from '../types';
+import { cardDef, cardId, isSuited } from '../types';
 import type { CardId, Rank } from '../types';
 import type { EventBus } from '../events';
 import type { GameState, HandState } from '../state';
@@ -98,11 +98,15 @@ function onHome(state: GameState, bus: EventBus, card: CardId): void {
 /** Kindling: charge travels to the rank-neighbours in the same suit. */
 function onKindling(state: GameState, bus: EventBus, card: CardId, depth: number): void {
   if (!hasMark(state, card, 'kindling')) return;
+  const { suit, rank } = cardDef(card);
+  // Kindling reaches "the ranks either side, same suit". A card with no suit or no rank of its own
+  // (the Joker) has no such neighbours, so it does not fire at all — checked BEFORE the fizzle
+  // roll, so a mark that cannot do anything does not consume the hand's roll sequence either.
+  if (!isSuited(suit) || rank === 0) return;
   if (rollFizzle(state)) {
     fired(bus, 'kindling', card, depth, true);
     return;
   }
-  const { suit, rank } = cardDef(card);
   fired(bus, 'kindling', card, depth);
   for (const r of [rank - 1, rank + 1]) {
     if (r < 1 || r > 13) continue;

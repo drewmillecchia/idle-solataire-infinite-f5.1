@@ -25,22 +25,25 @@
  * They must stay in step with that file; `tests/solver.test.ts` replays every solved line through the
  * real `klondike.move` / `klondike.draw`, which is what keeps them honest.
  */
-import { cardDef, isRed } from '$engine/types';
+import { cardDef, isRed, SUITS } from '$engine/types';
 import type { CardId } from '$engine/types';
+import { ALL_CARDS } from '$engine/deck';
 import { dealKlondike, type KlondikeBoard } from '../games/klondike';
-import { NO_TWISTS, type GameConfig, type Twists } from '../module';
+import { isWildCard, NO_TWISTS, type GameConfig, type Twists } from '../module';
 
 // ------------------------------------------------------------------ tables ---
 
-const DECK = 52;
+// Sized to the whole card universe, not to 52, so a deck shape with cards beyond the standard
+// grid indexes these tables safely (docs/12-ascension.md). An unsuited card gets suit -1, which
+// matches no suit — it can only ever reach a foundation as a wild card, which is what it is.
+const DECK = ALL_CARDS.length;
 const RANK: number[] = new Array<number>(DECK);
 const SUIT: number[] = new Array<number>(DECK);
 const RED: boolean[] = new Array<boolean>(DECK);
-for (let i = 0; i < DECK; i++) {
-  const d = cardDef(i);
-  RANK[i] = d.rank;
-  SUIT[i] = Math.floor(i / 13);
-  RED[i] = isRed(d.suit);
+for (const d of ALL_CARDS) {
+  RANK[d.id] = d.rank;
+  SUIT[d.id] = SUITS.indexOf(d.suit as (typeof SUITS)[number]);
+  RED[d.id] = isRed(d.suit);
 }
 /** SUITS is ['S','H','D','C']: 0 and 3 are black, 1 and 2 red. */
 const OPPOSITE: readonly [number, number][] = [
@@ -123,6 +126,8 @@ class Search {
   private readonly mirrorCards: CardId[] = [];
 
   private homed = 0;
+  /** Cards this deal put on the table: what "everything is home" means (KlondikeBoard.dealt). */
+  private readonly dealt: number;
   private readonly budget: number;
   private readonly maxDepth: number;
   nodes = 0;
@@ -142,13 +147,14 @@ class Search {
     this.redeals = board.redealsLeft;
     this.drawCount = board.drawCount;
     for (const f of this.found) this.homed += f.length;
+    this.dealt = board.dealt;
 
     const twists = opts?.twists ?? NO_TWISTS;
     this.wild = new Array<boolean>(DECK);
     this.mirror = new Array<boolean>(DECK);
     let anyWild = false;
     for (let i = 0; i < DECK; i++) {
-      const w = twists.isWild(i);
+      const w = isWildCard(i, twists);
       const m = twists.isMirror(i);
       this.wild[i] = w;
       this.mirror[i] = m;
@@ -164,9 +170,13 @@ class Search {
   // ------------------------------------------------------------ acceptance ---
 
   private foundationTakes(pile: CardId[], card: CardId): boolean {
+    // Mirrors `foundationAccepts` in ../games/klondike.ts: a rankless card only crowns a complete
+    // foundation, a wild one stands in for a rank. `tests/solver.test.ts` replays every solved
+    // line through the real rules, which is what keeps this copy honest.
+    if (rank(card) === 0) return pile.length === 13;
     const need = pile.length + 1;
+    if (this.wild[card] === true) return need <= 13;
     if (need > 13) return false;
-    if (this.wild[card] === true) return true;
     if (rank(card) !== need) return false;
     if (pile.length === 0) return true;
     let anchor: CardId | undefined = pile[0];
@@ -409,14 +419,14 @@ class Search {
   // ------------------------------------------------------------- the search ---
 
   run(): 'won' | 'lost' | 'unknown' {
-    if (this.homed === DECK) return 'won';
+    if (this.homed === this.dealt) return 'won';
     const won = this.search(this.maxDepth);
     if (won) return 'won';
     return this.truncated ? 'unknown' : 'lost';
   }
 
   private search(remaining: number): boolean {
-    if (this.homed === DECK) return true;
+    if (this.homed === this.dealt) return true;
     if (this.nodes >= this.budget) {
       this.truncated = true;
       return false;

@@ -43,22 +43,54 @@ and a deck of any size.
 | `table/cardFaces.ts` | 4 suit paths, 13 rank labels, red/black | A suit registry with path + ink colour; a Joker face; the Zero. |
 | `marks`, `constellation` | ids 0..51 in placements | Placements survive a shape change only if the card still exists; drop the rest on migration, and say so in the ledger. |
 
-**Sequencing.** (1) ✅ **Done 2026-09-05.** `engine/deck.ts` defines `DeckShape` with exactly one shape
-(`STANDARD_52`); `state.deck` holds a shape id (save v7); `deckSize` / `deckCards` / `cardDefIn` replace the
-`id / 13` arithmetic and every hardcoded 52 in `state`, `numbering`, `permutation`, `derive` and the save
-repair. No behaviour change: 490 tests pass and **not one existing test needed editing**, because the
-standard deck is still exactly 52. (2) Add the Joker shape and make the five games deal `context.deck`.
-(3) Only then build the Ascension layer itself.
+**Sequencing.** (1) ✅ **Done 2026-09-05.** `engine/deck.ts` defines `DeckShape`; `state.deck` holds a
+shape id (save v7); `deckSize` / `deckCards` / `cardDefIn` replace the `id / 13` arithmetic and every
+hardcoded 52 in `state`, `numbering`, `permutation`, `derive` and the save repair. No behaviour change:
+490 tests passed and **not one existing test needed editing**. (2) ✅ **Done 2026-09-06** — see below.
+(3) Build the Ascension layer itself: `performAscend`, the ceremony, the re-scaled Journey bar.
 
-**What step 1 could not reach, which is therefore what step 2 costs.** Each needs a directory the refactor
-deliberately stayed out of:
+### Step 2, as built (2026-09-06)
 
-| Still assumes 52 | Where | Why it waited |
-| --- | --- | --- |
-| `deal(STANDARD_DECK)` | `rules/games/*.ts` (all five) | A game must be handed the shape; that is a contract change (`deal(rng, config, twists)` gains a deck), so it belongs with the Joker, not before it. |
-| Suit paths, rank labels, red/black | `table/cardFaces.ts` | Needs a suit registry with ink colour, plus a Joker face. Pure rendering; no engine risk. |
-| `rankValue(system, rank)` reads `STANDARD_52` internally | `engine/numbering.ts` | Making it shape-aware means changing its signature, and `economy/numberingLadder.ts` calls it. One extra argument, threaded through two files. |
-| Mark placements are card ids | `engine/marks/*` | A shape change must drop placements for cards that no longer exist, and say so in the ledger. |
+**The model changed, and that is the load-bearing part.** Card ids are now indices into ONE
+append-only universe of cards, and a deck shape is a *prefix* of it — [ADR-015](03-decisions.md).
+The standard 52 is the first 52 ids, exactly as before; `JOKER_53` is those plus the Joker at id 52.
+Because shapes nest, a Mark placed on a card survives an Ascension without any remapping, and
+`cardDef(id)` still answers without being told which deck is in play.
+
+| Landed | Where |
+| --- | --- |
+| The universe, `JOKER_53`, `isJoker`, `deckCardIds` | `engine/deck.ts` |
+| `CardSuit = Suit \| 'J'`, `CardRank = Rank \| 0`, `isSuited` | `engine/types.ts` |
+| A card with no rank is worth the **average** rank under every system | `engine/numbering.ts` |
+| Unsuited cards take no suit multiplier, join no per-suit total, are never the favored or a laggard suit | `engine/economy/derive.ts` |
+| Kindling on an unsuited or unranked card warms nothing | `engine/marks/interpret.ts` |
+| Mark repair measures "off the deck" against the *active shape*, not a literal 52; `pruneMarksForShape` drops what a shape cannot hold (a Twin goes whole, not half) | `engine/save/serialize.ts`, `engine/marks/placement.ts` |
+| `deal(rng, config, twists, deck)` — a game is handed its cards; `isWildCard` makes the Joker wild by nature in every game | `rules/module.ts` |
+| A suit registry (glyph + ink) and the Joker's face: a floppy two-horned cap in brass, index `?` | `table/cardFaces.ts` |
+| A **rankless card crowns a finished foundation** (below) | `rules/games/klondike.ts`, `freecell.ts`, `rules/solver/klondike.ts` |
+
+**Where does the 53rd card go home?** This was the one real design problem step 2 turned up, and it
+is worth stating because it is not obvious. Klondike and FreeCell foundations hold thirteen ranks
+each: four piles, fifty-two places, fifty-three cards. A wild card can stand in for a rank, but a
+card with *no rank of its own* must not — standing in would occupy a rank's place and strand the real
+card of that rank forever, and greedy autoplay, which homes whatever it can, would do it on the first
+hand every time. **The rule:** a rankless card may only be played onto a foundation that is already
+complete, where it sits as a fourteenth card and crowns it. Capacity becomes 4 x 14, the Joker is
+always safely playable, and no line is ever poisoned by homing it early. `tests/solver.test.ts`
+proves the loop closes: the solver cracks a 53-card deal, the line replays through the real rules,
+and the winning position is 14/13/13/13 with the Joker on top.
+
+**A Mark that cannot work on the Joker is currently just inert** — Kindling has no rank-neighbours
+to warm, a Lantern lights no suit. The engine handles each safely and says so in a comment, but the
+Deck panel still offers them. Step 3 should either grey those out for a card outside the grid or
+give the Joker its own reading of them (a Lantern on the Joker lifting *every* suit is the obvious
+temptation, and probably too strong).
+
+**Open decisions this deliberately left to step 3.** The Joker's value is the average rank, which is
+the safe reading, not the exciting one — docs above say "earns what the highest-charged card earns",
+and that dynamic version is a `derive` question best answered when there is an Ascension to balance
+it against. Nothing yet *switches* a save's shape: `performAscend` is step 3, and it is the caller
+that must call `pruneMarksForShape` and say so in the ledger.
 
 ## The layer
 

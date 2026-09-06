@@ -7,15 +7,18 @@
  *  - mirror : the card counts as both colours, so it stacks either way in the tableau.
  *  - glass  : `dealtFaceUp(card)` cards dealt into a tableau's face-down stack stay visible in view().
  */
-import { cardDef, isRed, STANDARD_DECK } from '$engine/types';
+import { cardDef, isRed } from '$engine/types';
 import type { CardId } from '$engine/types';
+import { deckCardIds, STANDARD_52 } from '$engine/deck';
 import { mulberry32, shuffle } from '$engine/rng';
 import {
   noop,
   optionValue,
+  isWildCard,
   NO_TWISTS,
   type BoardCardView,
   type BoardView,
+  type DealDeck,
   type GameConfig,
   type GameModule,
   type GameOption,
@@ -45,6 +48,8 @@ export interface KlondikeBoard {
   moves: number;
   /** Cards the Glass twist dealt face-up while they sit in a face-down stack. */
   glass: CardId[];
+  /** How many cards this hand was dealt — the board's deck may not be the standard 52 (docs/12). */
+  dealt: number;
 }
 
 export const FOUNDATION_IDS = ['f0', 'f1', 'f2', 'f3'] as const;
@@ -105,11 +110,18 @@ function colourOk(lower: CardId, upper: CardId, twists: Twists): boolean {
 /** Foundations are ranked by height: a pile of n cards wants rank n+1, in the pile's suit. */
 export function foundationAccepts(pile: readonly CardId[], card: CardId, twists: Twists): boolean {
   const need = pile.length + 1;
+  // A card with NO RANK OF ITS OWN (the Joker) cannot stand in for one: it crowns a foundation
+  // that is already complete, and that is its only way home. Two reasons, both load-bearing.
+  // Capacity: four foundations hold 52 ranks, so a 53-card deck needs somewhere for the extra card
+  // to go (docs/12-ascension.md). Safety: a rankless card played as a stand-in would occupy a rank
+  // slot and strand the real card of that rank forever — and greedy autoplay, which homes whatever
+  // it can, would do exactly that on the first hand.
+  if (cardDef(card).rank === 0) return pile.length === 13;
+  if (isWildCard(card, twists)) return need <= 13;
   if (need > 13) return false;
-  if (twists.isWild(card)) return true;
   const def = cardDef(card);
   if (def.rank !== need) return false;
-  const anchor = pile.find((c) => !twists.isWild(c));
+  const anchor = pile.find((c) => !isWildCard(c, twists));
   if (anchor === undefined) return true;
   return cardDef(anchor).suit === def.suit;
 }
@@ -121,9 +133,9 @@ export function tableauAccepts(col: KlondikeColumn, card: CardId, twists: Twists
     // A column with face-down cards but no face-up card is not a legal empty slot; the
     // auto-flip in move() means this cannot happen on a well-formed board, but stay safe.
     if (col.down.length > 0) return false;
-    return twists.isWild(card) || cardDef(card).rank === 13;
+    return isWildCard(card, twists) || cardDef(card).rank === 13;
   }
-  if (twists.isWild(card) || twists.isWild(top)) return true;
+  if (isWildCard(card, twists) || isWildCard(top, twists)) return true;
   if (cardDef(card).rank !== cardDef(top).rank - 1) return false;
   return colourOk(top, card, twists);
 }
@@ -168,7 +180,8 @@ function cloneBoard(board: KlondikeBoard): KlondikeBoard {
     drawCount: board.drawCount,
     redealsLeft: board.redealsLeft,
     moves: board.moves,
-    glass: board.glass.slice()
+    glass: board.glass.slice(),
+    dealt: board.dealt
   };
 }
 
@@ -185,17 +198,14 @@ function redealsOf(config: GameConfig | undefined): number {
   return Number.isFinite(n) ? n : -1;
 }
 
-function dealWith(rng: () => number, config: GameConfig, twists: Twists): KlondikeBoard {
-  const deck = shuffle(
-    STANDARD_DECK.map((c) => c.id),
-    rng
-  );
+function dealWith(rng: () => number, config: GameConfig, twists: Twists, deck: DealDeck): KlondikeBoard {
+  const shuffled = shuffle(deck, rng);
   const tableau: KlondikeColumn[] = Array.from({ length: 7 }, () => ({ down: [], up: [] }));
   let k = 0;
   // The classic deal: one card to each remaining column, row by row.
   for (let row = 0; row < 7; row++) {
     for (let col = row; col < 7; col++) {
-      const card = deck[k++];
+      const card = shuffled[k++];
       const target = tableau[col];
       if (card === undefined || !target) continue;
       if (row === col) target.up.push(card);
@@ -205,20 +215,26 @@ function dealWith(rng: () => number, config: GameConfig, twists: Twists): Klondi
   const glass: CardId[] = [];
   for (const col of tableau) for (const c of col.down) if (twists.dealtFaceUp(c)) glass.push(c);
   return {
-    stock: deck.slice(k),
+    stock: shuffled.slice(k),
     waste: [],
     foundations: [[], [], [], []],
     tableau,
     drawCount: drawCountOf(config),
     redealsLeft: redealsOf(config),
     moves: 0,
-    glass
+    glass,
+    dealt: shuffled.length
   };
 }
 
-/** Convenience for tests, the sim and bug reports: a seeded Klondike deal. */
-export function dealKlondike(seed: number, config?: GameConfig, twists?: Twists): KlondikeBoard {
-  return dealWith(mulberry32(seed), config ?? {}, twists ?? NO_TWISTS);
+/** Convenience for tests, the sim and bug reports: a seeded Klondike deal off the standard 52. */
+export function dealKlondike(
+  seed: number,
+  config?: GameConfig,
+  twists?: Twists,
+  deck?: DealDeck
+): KlondikeBoard {
+  return dealWith(mulberry32(seed), config ?? {}, twists ?? NO_TWISTS, deck ?? deckCardIds(STANDARD_52));
 }
 
 // ------------------------------------------------------------------- view ---
@@ -417,8 +433,18 @@ function doDraw(board: KlondikeBoard): MoveResult<KlondikeBoard> {
 
 // ------------------------------------------------------------- state tests ---
 
+/**
+ * Won when every dealt card is home. NOT `foundations.every(f => f.length === 13)`: that assumes
+ * a 52-card deck, and with a wild card in play (the Joker, docs/12) it is wrong either way — a
+ * deck bigger than 52 could satisfy it while a card is still stranded on the table, and a deck
+ * smaller than 52 could never satisfy it at all. A foundation holds its thirteen ranks and, once
+ * complete, one rankless card crowning it (`foundationAccepts`) — so a 53-card deck does fit:
+ * fifty-two cards in their four runs, and the Joker on top of whichever finishes first.
+ */
 function isWonBoard(board: KlondikeBoard): boolean {
-  return board.foundations.length === 4 && board.foundations.every((f) => f.length === 13);
+  if (board.foundations.length !== 4) return false;
+  const home = board.foundations.reduce((sum, f) => sum + f.length, 0);
+  return home === board.dealt;
 }
 
 /** Every legal non-draw move on the board. Useful for tests, autoplay and the solver. */
@@ -455,7 +481,9 @@ function stuck(board: KlondikeBoard, twists: Twists): boolean {
 
 function hashBoard(board: KlondikeBoard): string {
   // `moves` is deliberately excluded: the hash identifies a POSITION, so autoplay's cycle
-  // detection works. Everything else that can differ between positions is included.
+  // detection works. `dealt` is excluded too: it is fixed at deal time and identical across every
+  // position reachable from one deal, so it could never help distinguish two of them. Everything
+  // else that can differ between positions is included.
   const t = board.tableau.map((c) => `${c.down.join('.')}:${c.up.join('.')}`).join('/');
   const f = board.foundations.map((x) => x.join('.')).join('/');
   return `${board.stock.join('.')}|${board.waste.join('.')}|${f}|${t}|${board.drawCount}|${board.redealsLeft}|${board.glass.join('.')}`;
@@ -470,8 +498,8 @@ export const klondike: GameModule<KlondikeBoard> = {
   options: OPTIONS,
   honours: ['wild', 'mirror', 'glass'],
 
-  deal(rng, config, twists) {
-    return dealWith(rng, config, twists);
+  deal(rng, config, twists, deck) {
+    return dealWith(rng, config, twists, deck);
   },
 
   view(board) {

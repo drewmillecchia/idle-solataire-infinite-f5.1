@@ -22,13 +22,16 @@
  *  - glass : `dealtFaceUp(card)` cards dealt into a covered slot stay visible in view().
  *  - mirror: irrelevant here — TriPeaks never looks at colour.
  */
-import { cardDef, STANDARD_DECK } from '$engine/types';
+import { cardDef } from '$engine/types';
 import type { CardId } from '$engine/types';
+import { deckCardIds, STANDARD_52 } from '$engine/deck';
 import { mulberry32, shuffle } from '$engine/rng';
 import {
   noop,
+  isWildCard,
   NO_TWISTS,
   type BoardView,
+  type DealDeck,
   type GameConfig,
   type GameModule,
   type GameOption,
@@ -138,10 +141,10 @@ function adjacentRank(a: CardId, b: CardId): boolean {
 
 /** May `card` be played onto the waste right now? */
 export function playableOnWaste(board: TriPeaksBoard, card: CardId, twists: Twists): boolean {
-  if (twists.isWild(card)) return true;
+  if (isWildCard(card, twists)) return true;
   const top = board.waste[board.waste.length - 1];
   if (top === undefined) return false;
-  if (twists.isWild(top)) return true;
+  if (isWildCard(top, twists)) return true;
   return adjacentRank(card, top);
 }
 
@@ -159,14 +162,12 @@ function cloneBoard(board: TriPeaksBoard): TriPeaksBoard {
 
 // ----------------------------------------------------------------- deal ---
 
-function dealWith(rng: () => number, _config: GameConfig, twists: Twists): TriPeaksBoard {
-  const deck = shuffle(
-    STANDARD_DECK.map((c) => c.id),
-    rng
-  );
-  const slots: (CardId | null)[] = deck.slice(0, SLOT_COUNT).map((c) => c ?? null);
-  // 24 left over; reversed so the TOP (last element) is the next card to turn. One goes up at deal.
-  const stock = deck.slice(SLOT_COUNT).reverse();
+function dealWith(rng: () => number, _config: GameConfig, twists: Twists, deck: DealDeck): TriPeaksBoard {
+  const shuffled = shuffle(deck, rng);
+  const slots: (CardId | null)[] = shuffled.slice(0, SLOT_COUNT).map((c) => c ?? null);
+  // Whatever is left over (24 for the standard 52); reversed so the TOP (last element) is the
+  // next card to turn. One goes up at deal.
+  const stock = shuffled.slice(SLOT_COUNT).reverse();
   const first = stock.pop();
   const waste: CardId[] = first === undefined ? [] : [first];
 
@@ -181,9 +182,14 @@ function dealWith(rng: () => number, _config: GameConfig, twists: Twists): TriPe
   return board;
 }
 
-/** Convenience for tests, the sim and bug reports: a seeded TriPeaks deal. */
-export function dealTriPeaks(seed: number, config?: GameConfig, twists?: Twists): TriPeaksBoard {
-  return dealWith(mulberry32(seed), config ?? {}, twists ?? NO_TWISTS);
+/** Convenience for tests, the sim and bug reports: a seeded TriPeaks deal off the standard 52. */
+export function dealTriPeaks(
+  seed: number,
+  config?: GameConfig,
+  twists?: Twists,
+  deck?: DealDeck
+): TriPeaksBoard {
+  return dealWith(mulberry32(seed), config ?? {}, twists ?? NO_TWISTS, deck ?? deckCardIds(STANDARD_52));
 }
 
 // ----------------------------------------------------------------- view ---
@@ -344,8 +350,8 @@ export const tripeaks: GameModule<TriPeaksBoard> = {
   options: [] as GameOption[],
   honours: ['wild', 'glass'],
 
-  deal(rng, config, twists) {
-    return dealWith(rng, config, twists);
+  deal(rng, config, twists, deck) {
+    return dealWith(rng, config, twists, deck);
   },
 
   view(board) {

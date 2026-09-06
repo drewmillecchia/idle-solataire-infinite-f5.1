@@ -8,6 +8,7 @@
  * Placing is free and allowed at any moment: the host decides whether to offer it mid-hand.
  */
 import { MARKS } from '$content/index';
+import { deckShape, deckSize } from '../deck';
 import type { MarkDef } from '$content/index';
 import type { EventBus } from '../events';
 import type { GameState } from '../state';
@@ -63,6 +64,27 @@ export function cardAccepts(state: GameState, card: CardId, markId: string): boo
   if (existing.length === 0) return true;
   if (markId === 'twin') return !existing.includes('twin') && existing.length === 1;
   return existing.length === 1 && existing[0] === 'twin';
+}
+
+/**
+ * Drops placements on cards the current deck shape does not contain, and returns how many cards
+ * were dropped. A shape only ever GROWS (deck.ts's universe is append-only and every shape is a
+ * prefix of it), so this fires in exactly two situations: a save carrying a bigger deck's marks
+ * loaded against a smaller shape, and a Twin whose partner is gone. A Twin loses its whole
+ * placement rather than half of it — half a wire is not a Twin.
+ *
+ * The caller says so in the ledger; this function is silent, because the save's repair pass runs
+ * it before there is a bus to talk to (docs/12-ascension.md).
+ */
+export function pruneMarksForShape(state: GameState): number {
+  const size = deckSize(deckShape(state.deck));
+  const list = placed(state);
+  const kept = list.filter((p) => p.cards.every((id) => id >= 0 && id < size));
+  if (kept.length === list.length) return 0;
+  const dropped = list.length - kept.length;
+  state.marks.placed = kept;
+  syncMarkCache(state);
+  return dropped;
 }
 
 /** Rebuilds the `cards[i].marks` render cache from `state.marks.placed`. */

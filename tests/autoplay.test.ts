@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { cardId } from '$engine/types';
 import { mulberry32 } from '$engine/rng';
+import { deckCardIds, STANDARD_52 } from '$engine/deck';
 import { NO_TWISTS } from '../src/rules/module';
 import { GAMES } from '../src/rules/registry';
 import { nextMove, solveGreedy } from '../src/rules/autoplay';
 import { dealKlondike, klondike, type KlondikeBoard } from '../src/rules/games/klondike';
+
+const STANDARD_IDS = deckCardIds(STANDARD_52);
 
 const S = (r: number) => cardId('S', r as 1);
 const H = (r: number) => cardId('H', r as 1);
@@ -19,6 +22,7 @@ function board(p: Partial<KlondikeBoard> = {}): KlondikeBoard {
     redealsLeft: -1,
     moves: 0,
     glass: [],
+    dealt: 52,
     ...p
   };
 }
@@ -97,7 +101,7 @@ describe('solveGreedy', () => {
   it('terminates on every registry game across many seeds', () => {
     for (const game of GAMES) {
       for (let seed = 1; seed <= 20; seed++) {
-        const b = game.deal(mulberry32(seed), {}, NO_TWISTS);
+        const b = game.deal(mulberry32(seed), {}, NO_TWISTS, STANDARD_IDS);
         const r = solveGreedy(game, b, NO_TWISTS, 2000);
         expect(r.steps).toBeLessThan(2000);
         expect(r.won).toBe(game.isWon(r.board));

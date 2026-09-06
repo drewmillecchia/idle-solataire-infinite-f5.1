@@ -24,15 +24,18 @@
  *  - mirror: irrelevant — Golf never looks at colour.
  *  - glass : irrelevant — every tableau card is dealt face-up already.
  */
-import { cardDef, STANDARD_DECK } from '$engine/types';
+import { cardDef } from '$engine/types';
 import type { CardId } from '$engine/types';
+import { deckCardIds, STANDARD_52 } from '$engine/deck';
 import { mulberry32, shuffle } from '$engine/rng';
 import {
   noop,
   optionValue,
+  isWildCard,
   NO_TWISTS,
   FAN_UP,
   type BoardView,
+  type DealDeck,
   type GameConfig,
   type GameModule,
   type GameOption,
@@ -106,10 +109,10 @@ function adjacentRank(a: CardId, b: CardId, wrap: boolean): boolean {
 
 /** May `card` be played onto the waste right now? */
 export function golfPlayableOnWaste(board: GolfBoard, card: CardId, twists: Twists): boolean {
-  if (twists.isWild(card)) return true;
+  if (isWildCard(card, twists)) return true;
   const top = board.waste[board.waste.length - 1];
   if (top === undefined) return false;
-  if (twists.isWild(top)) return true;
+  if (isWildCard(top, twists)) return true;
   return adjacentRank(card, top, board.wrap);
 }
 
@@ -131,33 +134,36 @@ function wrapOf(config: GameConfig | undefined): boolean {
   return optionValue(golf as GameModule, config, 'wrap') === 'yes';
 }
 
-function dealWith(rng: () => number, config: GameConfig, _twists: Twists): GolfBoard {
-  const deck = shuffle(
-    STANDARD_DECK.map((c) => c.id),
-    rng
-  );
+function dealWith(rng: () => number, config: GameConfig, _twists: Twists, deck: DealDeck): GolfBoard {
+  const shuffled = shuffle(deck, rng);
   const columns: CardId[][] = Array.from({ length: GOLF_COLUMNS }, () => []);
   let k = 0;
   // Row by row, dealer style: one card to each column, five times round.
   for (let row = 0; row < GOLF_COLUMN_HEIGHT; row++) {
     for (let col = 0; col < GOLF_COLUMNS; col++) {
-      const card = deck[k++];
+      const card = shuffled[k++];
       const target = columns[col];
       if (card === undefined || !target) continue;
       target.push(card);
     }
   }
-  // 17 left over; reversed so the TOP (last element) is the next card to turn. One goes up at deal.
-  const stock = deck.slice(k).reverse();
+  // Whatever is left over (17 for the standard 52); reversed so the TOP (last element) is the next
+  // card to turn. One goes up at deal.
+  const stock = shuffled.slice(k).reverse();
   const first = stock.pop();
   const waste: CardId[] = first === undefined ? [] : [first];
 
   return { columns, stock, waste, wrap: wrapOf(config), moves: 0 };
 }
 
-/** Convenience for tests, the sim and bug reports: a seeded Golf deal. */
-export function dealGolf(seed: number, config?: GameConfig, twists?: Twists): GolfBoard {
-  return dealWith(mulberry32(seed), config ?? {}, twists ?? NO_TWISTS);
+/** Convenience for tests, the sim and bug reports: a seeded Golf deal off the standard 52. */
+export function dealGolf(
+  seed: number,
+  config?: GameConfig,
+  twists?: Twists,
+  deck?: DealDeck
+): GolfBoard {
+  return dealWith(mulberry32(seed), config ?? {}, twists ?? NO_TWISTS, deck ?? deckCardIds(STANDARD_52));
 }
 
 // ------------------------------------------------------------------- view ---
@@ -310,8 +316,8 @@ export const golf: GameModule<GolfBoard> = {
   options: OPTIONS,
   honours: ['wild'],
 
-  deal(rng, config, twists) {
-    return dealWith(rng, config, twists);
+  deal(rng, config, twists, deck) {
+    return dealWith(rng, config, twists, deck);
   },
 
   view(board) {

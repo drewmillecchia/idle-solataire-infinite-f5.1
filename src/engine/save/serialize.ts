@@ -164,7 +164,7 @@ function repairNumberingList(value: unknown, fallback: NumberingId[]): Numbering
  * burst, `seed` falls back to 0 (the next `dealHand` overwrites it anyway), and `fizzleSeq` is a
  * non-negative integer (invariant #10: repair, never throw).
  */
-function repairHand(value: unknown, fallback: HandState): HandState {
+function repairHand(value: unknown, fallback: HandState, cardCount: number): HandState {
   if (!isRecord(value)) {
     return {
       echoRanks: [...fallback.echoRanks],
@@ -178,8 +178,10 @@ function repairHand(value: unknown, fallback: HandState): HandState {
   const homed = Array.isArray(value.homedThisHand) ? value.homedThisHand : [];
   const rawRoll = toNum(value.roll, fallback.roll);
   return {
-    echoRanks: ranks.filter((r): r is number => typeof r === 'number' && Number.isInteger(r) && r >= 1 && r <= 13),
-    homedThisHand: homed.filter((c): c is number => typeof c === 'number' && Number.isInteger(c) && c >= 0 && c < 52),
+    // Rank 0 is a real rank slot (the card that has none — the Joker), so the floor here is 0,
+    // not 1; and a card id is checked against the active shape, not a literal 52.
+    echoRanks: ranks.filter((r): r is number => typeof r === 'number' && Number.isInteger(r) && r >= 0 && r <= 13),
+    homedThisHand: homed.filter((c): c is number => typeof c === 'number' && Number.isInteger(c) && c >= 0 && c < cardCount),
     roll: Math.min(ROLL_MAX, Math.max(ROLL_MIN, rawRoll)),
     seed: toNum(value.seed, fallback.seed),
     fizzleSeq: Math.max(0, Math.floor(toNum(value.fizzleSeq, fallback.fizzleSeq)))
@@ -191,8 +193,12 @@ function repairHand(value: unknown, fallback: HandState): HandState {
  * the file: an unknown mark id, the wrong number of cards for its arity, a card id off the deck, a
  * repeated card inside a Twin, or a card already carrying a mark it cannot share with (a card holds
  * one mark, plus at most one Twin) all drop the placement rather than the save (invariant #10).
+ *
+ * "Off the deck" is measured against `cardCount` — the ACTIVE shape's size, not a literal 52 — so a
+ * save made with a bigger deck loses only the placements whose cards this deck does not have
+ * (docs/12-ascension.md), and a save made with the Joker keeps it.
  */
-function repairMarks(value: unknown): MarksState {
+function repairMarks(value: unknown, cardCount: number): MarksState {
   if (!isRecord(value)) return { placed: [] };
   const raw = Array.isArray(value.placed) ? value.placed : [];
   const out: PlacedMark[] = [];
@@ -204,7 +210,7 @@ function repairMarks(value: unknown): MarksState {
     if (!def) continue;
     const cardsRaw = Array.isArray(entry.cards) ? entry.cards : [];
     const cards = cardsRaw.filter(
-      (c): c is number => typeof c === 'number' && Number.isInteger(c) && c >= 0 && c < 52
+      (c): c is number => typeof c === 'number' && Number.isInteger(c) && c >= 0 && c < cardCount
     );
     if (cards.length !== def.arity) continue;
     if (new Set(cards).size !== cards.length) continue;
@@ -216,7 +222,7 @@ function repairMarks(value: unknown): MarksState {
   return { placed: out };
 }
 
-function repairRun(value: unknown, fallback: RunState): RunState {
+function repairRun(value: unknown, fallback: RunState, cardCount: number): RunState {
   if (!isRecord(value)) return fallback;
   const way = typeof value.way === 'string' && (WAY_IDS as readonly string[]).includes(value.way)
     ? (value.way as WayId)
@@ -231,7 +237,7 @@ function repairRun(value: unknown, fallback: RunState): RunState {
     handsWon: Math.max(0, Math.floor(toNum(value.handsWon, fallback.handsWon))),
     homedThisRun: Math.max(0, Math.floor(toNum(value.homedThisRun, fallback.homedThisRun))),
     undosThisHand: Math.max(0, Math.floor(toNum(value.undosThisHand, fallback.undosThisHand))),
-    hand: repairHand(value.hand, fallback.hand)
+    hand: repairHand(value.hand, fallback.hand, cardCount)
   };
 }
 
@@ -343,9 +349,9 @@ function repair(raw: RawSave, now: number): GameState {
     deck: deckId,
     numbering: repairNumbering(raw.numbering, initial.numbering),
     unlockedNumberings: repairNumberingList(raw.unlockedNumberings, initial.unlockedNumberings),
-    run: repairRun(raw.run, initial.run),
+    run: repairRun(raw.run, initial.run, cardCount),
     prestige: repairPrestige(raw.prestige, initial.prestige),
-    marks: repairMarks(raw.marks),
+    marks: repairMarks(raw.marks, cardCount),
     revealed: toStringArray(raw.revealed, []),
     milestones: toStringArray(raw.milestones, []),
     settings: repairSettings(raw.settings, initial.settings),

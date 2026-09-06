@@ -3,7 +3,7 @@
  * Cream paper, ink pips, minimal courts. Everything is vector so it stays crisp at any card size.
  */
 import { Texture } from 'pixi.js';
-import { cardDef, isRed, type CardId, type Rank, type Suit } from '$engine/types';
+import { cardDef, type CardId, type CardRank, type CardSuit, type Rank } from '$engine/types';
 
 export const PALETTE = {
   paper: '#f4ead8',
@@ -16,15 +16,43 @@ export const PALETTE = {
   lamp: '#ffd9a0'
 };
 
-const SUIT_PATH: Record<Suit, string> = {
-  // All paths drawn in a 100×100 box, centred.
-  H: 'M50 88 C20 62 8 48 8 32 C8 18 19 10 30 10 C39 10 46 15 50 22 C54 15 61 10 70 10 C81 10 92 18 92 32 C92 48 80 62 50 88 Z',
-  D: 'M50 6 L86 50 L50 94 L14 50 Z',
-  S: 'M50 8 C30 34 10 46 10 62 C10 74 20 82 30 82 C37 82 43 78 46 73 C45 82 41 88 34 93 L66 93 C59 88 55 82 54 73 C57 78 63 82 70 82 C80 82 90 74 90 62 C90 46 70 34 50 8 Z',
-  C: 'M50 6 C39 6 31 14 31 24 C31 29 33 33 36 36 C33 34 29 33 25 33 C14 33 6 41 6 52 C6 63 14 71 25 71 C33 71 40 66 44 60 C43 70 39 84 32 93 L68 93 C61 84 57 70 56 60 C60 66 67 71 75 71 C86 71 94 63 94 52 C94 41 86 33 75 33 C71 33 67 34 64 36 C67 33 69 29 69 24 C69 14 61 6 50 6 Z'
+/**
+ * The suit registry: one entry per suit slot, holding the glyph drawn in a 100x100 box and the ink
+ * it is drawn in. Ascension adds suits HERE and nowhere else (docs/12-ascension.md) — a new suit is
+ * a path and a colour, not a change to any of the drawing code below.
+ */
+interface SuitFace {
+  /** Markup for the glyph, centred in a 100x100 box, filled with `fill`. */
+  glyph: (fill: string) => string;
+  /** The card's ink when nothing else overrides it. */
+  ink: string;
+}
+
+const path = (d: string) => (fill: string) => `<path d="${d}" fill="${fill}"/>`;
+
+const SUIT_FACE: Record<CardSuit, SuitFace> = {
+  // All glyphs drawn in a 100x100 box, centred.
+  H: { ink: PALETTE.rouge, glyph: path('M50 88 C20 62 8 48 8 32 C8 18 19 10 30 10 C39 10 46 15 50 22 C54 15 61 10 70 10 C81 10 92 18 92 32 C92 48 80 62 50 88 Z') },
+  D: { ink: PALETTE.rouge, glyph: path('M50 6 L86 50 L50 94 L14 50 Z') },
+  S: { ink: PALETTE.ink, glyph: path('M50 8 C30 34 10 46 10 62 C10 74 20 82 30 82 C37 82 43 78 46 73 C45 82 41 88 34 93 L66 93 C59 88 55 82 54 73 C57 78 63 82 70 82 C80 82 90 74 90 62 C90 46 70 34 50 8 Z') },
+  C: { ink: PALETTE.ink, glyph: path('M50 6 C39 6 31 14 31 24 C31 29 33 33 36 36 C33 34 29 33 25 33 C14 33 6 41 6 52 C6 63 14 71 25 71 C33 71 40 66 44 60 C43 70 39 84 32 93 L68 93 C61 84 57 70 56 60 C60 66 67 71 75 71 C86 71 94 63 94 52 C94 41 86 33 75 33 C71 33 67 34 64 36 C67 33 69 29 69 24 C69 14 61 6 50 6 Z') },
+  // The Joker belongs to no suit, so its glyph is not a pip but a jester's cap — and it is the one
+  // card drawn in brass, the colour this game reserves for things that were earned.
+  J: {
+    ink: PALETTE.brass,
+    // Two floppy horns with bells, deliberately NOT the three points of the King's crown: at pip
+    // size the only thing that separates them is the silhouette, so the cap droops and the crown
+    // stands up.
+    glyph: (fill) =>
+      `<path d="M50 30 C38 12 16 10 12 26 C8 42 22 50 32 52 C24 62 22 74 24 86 L76 86 C78 74 76 62 68 52 C78 48 92 40 88 24 C84 10 62 12 50 30 Z" fill="${fill}"/>` +
+      `<circle cx="10" cy="24" r="7" fill="${fill}"/><circle cx="90" cy="22" r="7" fill="${fill}"/>`
+  }
 };
 
-const RANK_LABEL: Record<Rank, string> = {
+const RANK_LABEL: Record<CardRank, string> = {
+  // 0 is the rank of a card that has none. '?' rather than 'J', which is already the Jack: the
+  // Joker's index should read "this card is whatever it needs to be" at a glance.
+  0: '?',
   1: 'A', 2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: '8', 9: '9', 10: '10', 11: 'J', 12: 'Q', 13: 'K'
 };
 
@@ -45,11 +73,15 @@ const W = 250; // design units; aspect 0.7
 const H = Math.round(W / 0.7); // 357
 const R = W * 0.06;
 
-function pip(suit: Suit, cx: number, cy: number, size: number, flipped = false, color?: string): string {
-  const fill = color ?? (isRed(suit) ? PALETTE.rouge : PALETTE.ink);
+function inkOf(suit: CardSuit): string {
+  return SUIT_FACE[suit].ink;
+}
+
+function pip(suit: CardSuit, cx: number, cy: number, size: number, flipped = false, color?: string): string {
+  const fill = color ?? inkOf(suit);
   const s = size / 100;
   const rot = flipped ? ' rotate(180)' : '';
-  return `<g transform="translate(${cx} ${cy})${rot} scale(${s}) translate(-50 -50)"><path d="${SUIT_PATH[suit]}" fill="${fill}"/></g>`;
+  return `<g transform="translate(${cx} ${cy})${rot} scale(${s}) translate(-50 -50)">${SUIT_FACE[suit].glyph(fill)}</g>`;
 }
 
 function courtFigure(rank: Rank, color: string): string {
@@ -81,7 +113,7 @@ function courtFigure(rank: Rank, color: string): string {
 
 export function cardFaceSvg(id: CardId): string {
   const { suit, rank } = cardDef(id);
-  const color = isRed(suit) ? PALETTE.rouge : PALETTE.ink;
+  const color = inkOf(suit);
   const label = RANK_LABEL[rank];
   const idxSize = W * 0.17;
   const parts: string[] = [];
@@ -94,11 +126,16 @@ export function cardFaceSvg(id: CardId): string {
   parts.push(idx(W * 0.13, H * 0.085, false));
   parts.push(idx(W * 0.87, H * 0.915, true));
   // Body.
-  if (rank === 1) {
+  if (rank === 0) {
+    // No rank, no pips: the cap alone, inside the court's frame, so it reads as a face card that
+    // refuses to say which one.
+    parts.push(`<rect x="${W * 0.2}" y="${H * 0.2}" width="${W * 0.6}" height="${H * 0.6}" rx="${R * 0.6}" fill="none" stroke="${color}" stroke-width="2.5" opacity="0.55"/>`);
+    parts.push(pip(suit, W / 2, H / 2, W * 0.5));
+  } else if (rank === 1) {
     parts.push(pip(suit, W / 2, H / 2, W * 0.5));
   } else if (rank >= 11) {
     parts.push(`<rect x="${W * 0.2}" y="${H * 0.2}" width="${W * 0.6}" height="${H * 0.6}" rx="${R * 0.6}" fill="none" stroke="${color}" stroke-width="2.5" opacity="0.55"/>`);
-    parts.push(courtFigure(rank, color));
+    parts.push(courtFigure(rank as Rank, color));
     parts.push(pip(suit, W * 0.5, H * 0.7, W * 0.12));
   } else {
     const layout = PIP_LAYOUT[rank] ?? [];

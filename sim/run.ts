@@ -6,7 +6,8 @@ import {
   canReshuffle, permutationsOnReshuffle, performReshuffle, cycleCuts as cycleCutsOf,
   numberingOptions, unlockNumbering, selectNumbering,
   buyNode, canBuyNode, nodeCost, visibleNodes,
-  formatNumber, formatRate
+  formatNumber, formatRate,
+  deckCardIds, STANDARD_52
 } from '$engine/index';
 import type { NumberingId } from '$engine/types';
 import type Decimal from 'break_eternity.js';
@@ -105,7 +106,7 @@ export function runSim(hours: number, profile: Profile, seed = 1, opts: SimOptio
   const state = createInitialState(0);
   const rng = mulberry32(seed);
   const game = gameById('klondike')!;
-  let board: unknown = game.deal(rng, {}, NO_TWISTS);
+  let board: unknown = game.deal(rng, {}, NO_TWISTS, deckCardIds(STANDARD_52));
   let seen = new Set<string>();
   const res: SimResult = {
     hours, profile, firstAwakeAt: null, allAwakeAt: null, allAwakeInFirstRun: false,
@@ -182,7 +183,7 @@ export function runSim(hours: number, profile: Profile, seed = 1, opts: SimOptio
   };
 
   const newHand = () => {
-    board = game.deal(rng, {}, NO_TWISTS);
+    board = game.deal(rng, {}, NO_TWISTS, deckCardIds(STANDARD_52));
     seen = new Set();
     dealHand(state, bus, 'klondike', 0);
     res.hands++;

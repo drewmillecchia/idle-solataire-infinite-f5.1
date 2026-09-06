@@ -9,7 +9,7 @@
 import Decimal from 'break_eternity.js';
 import { STANDARD_52 } from './deck';
 import { D } from './numbers';
-import type { NumberingId, Rank } from './types';
+import type { CardRank, NumberingId } from './types';
 
 export const NUMBERING_ORDER: readonly NumberingId[] = [
   'natural',
@@ -127,8 +127,20 @@ function normalized(id: NumberingId): NormalizedSystem {
   return result;
 }
 
-/** Value of a rank (1..13) under a numbering system, normalized so the 13-rank total is 91. */
-export function rankValue(system: NumberingId, rank: Rank): Decimal {
+/**
+ * The average rank value under every system — 91/13 = 7 for the standard deck, by construction,
+ * because normalization fixes the total. This is what a card with NO rank of its own is worth
+ * (rank 0: the Joker). Deliberately not "the top rank": under tetration the top rank holds the
+ * entire 91, so a Joker that copied it would double the deck's output the moment it arrived.
+ * Average is the reading that survives every system — the Joker sits outside the numbering, and
+ * is the one card a numbering system cannot bend. Provisional until the Ascension layer ships
+ * (docs/12-ascension.md); it is a content decision, and it lives here in one line.
+ */
+const UNRANKED_VALUE = NATURAL_TOTAL.div(RANK_COUNT);
+
+/** Value of a rank under a numbering system, normalized so the 13-rank total is 91. */
+export function rankValue(system: NumberingId, rank: CardRank): Decimal {
+  if (rank === 0) return UNRANKED_VALUE;
   const sys = normalized(system);
   const v = sys.values[rank - 1];
   if (!v) throw new RangeError(`bad rank ${rank}`);

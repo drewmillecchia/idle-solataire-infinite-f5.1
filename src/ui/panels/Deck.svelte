@@ -2,13 +2,14 @@
   /** The deck spread: every card's generator state at a glance. Mark placement arrives with M4. */
   import type { GameHost } from '../host.svelte';
   import { SUITS, RANKS, cardId, isRed } from '$engine/types';
+  import { cardTag } from '../a11yModel';
   let { host }: { host: GameHost } = $props();
   const SUIT_GLYPH: Record<string, string> = { S: '♠', H: '♥', D: '♦', C: '♣' };
   const RANK_LABEL = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
 </script>
 
 <div class="deck">
-  <p class="lede">{host.view.awake} of 52 awake. A card earns nothing until it has come home once; every time after adds a charge.</p>
+  <p class="lede">{host.view.awake} of {host.view.deck.length} awake. A card earns nothing until it has come home once; every time after adds a charge.</p>
   {#if host.view.marks.available.length}
     {@const m = host.view.marks}
     <div class="marks">
@@ -33,7 +34,7 @@
       {#if m.placed.length}
         <ul class="placed">
           {#each m.placed as p, i (i)}
-            <li><span class="glyph">{p.glyph}</span> {p.name} on {p.cards.map((c) => (RANK_LABEL[c % 13] ?? '') + (SUIT_GLYPH[SUITS[Math.floor(c / 13)] ?? 'S'] ?? '')).join(' & ')}
+            <li><span class="glyph">{p.glyph}</span> {p.name} on {p.cards.map(cardTag).join(' & ')}
               <button class="link" onclick={() => host.unplaceMark(p.id, p.cards[0] ?? 0)}>remove</button></li>
           {/each}
         </ul>
@@ -56,6 +57,22 @@
       </div>
     </div>
   {/each}
+  {#if host.view.deck.length > SUITS.length * RANKS.length}
+    <div class="suit">
+      <span class="suitmark wild">?</span>
+      <div class="cards">
+        {#each host.view.deck.slice(SUITS.length * RANKS.length) as c, i (i)}
+          {@const id = SUITS.length * RANKS.length + i}
+          <button class="card wild" class:awake={c.awake} class:selected={c.selected}
+            onclick={() => host.tapDeckCard(id)} title={`${cardTag(id)} \u00b7 ${c.awake ? `awake, charge ${c.charge}` : 'asleep'}`}>
+            <span class="r">{cardTag(id)}</span>
+            {#if c.glyph}<span class="g">{c.glyph}</span>{/if}
+            {#if c.awake}<span class="ticks">{#each Array(Math.min(5, c.charge)) as _, j (j)}<i></i>{/each}{#if c.charge > 5}<b>{c.charge}</b>{/if}</span>{/if}
+          </button>
+        {/each}
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -80,6 +97,9 @@
   .suit { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
   .suitmark { width: 14px; color: var(--paper); font-size: 14px; }
   .suitmark.red { color: #d9756c; }
+  /* Cards outside the suit x rank grid: brass, the colour reserved for what was earned. */
+  .suitmark.wild { color: var(--brass); }
+  .card.wild.awake { color: var(--brass-dim); }
   .cards { display: grid; grid-template-columns: repeat(13, 1fr); gap: 2px; flex: 1; }
   .card { position: relative; aspect-ratio: 0.7; border-radius: 3px; background: rgba(244,234,216,0.12); border: 1px solid rgba(244,234,216,0.15); color: var(--paper-shade); font-family: var(--font-serif); font-size: 10px; display: flex; align-items: flex-start; justify-content: flex-start; padding: 1px 2px; opacity: 0.55; }
   .card.awake { background: var(--paper); color: var(--ink); opacity: 1; border-color: var(--brass); }

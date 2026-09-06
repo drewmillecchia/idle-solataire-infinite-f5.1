@@ -32,11 +32,11 @@ const chain = await page.evaluate(() => {
   const g = window.__game;
   const f = (s, n) => Array.from({ length: n }, (_, i) => s * 13 + i);
   // Spades foundation A..4 built; 5♠ (id 4) on the waste; tap it home.
-  const board = { stock: [], waste: [4], foundations: [f(0, 4), [], [], []], tableau: Array.from({ length: 7 }, () => ({ down: [], up: [] })), drawCount: 1, redealsLeft: -1, moves: 0, glass: [] };
+  const board = { stock: [], waste: [4], foundations: [f(0, 4), [], [], []], tableau: Array.from({ length: 7 }, () => ({ down: [], up: [] })), drawCount: 1, redealsLeft: -1, moves: 0, glass: [], dealt: 52 };
   window.__game.setBoardForTesting(board);
   g.tap('waste', 0); // first home: 5♠ wakes; Twin wakes 5♥
   // Second home: put 5♠ back on the waste with the foundation at A..4 again (a fresh constructed board).
-  const board2 = { stock: [], waste: [4], foundations: [f(0, 4), [], [], []], tableau: Array.from({ length: 7 }, () => ({ down: [], up: [] })), drawCount: 1, redealsLeft: -1, moves: 0, glass: [] };
+  const board2 = { stock: [], waste: [4], foundations: [f(0, 4), [], [], []], tableau: Array.from({ length: 7 }, () => ({ down: [], up: [] })), drawCount: 1, redealsLeft: -1, moves: 0, glass: [], dealt: 52 };
   window.__game.setBoardForTesting(board2);
   g.tap('waste', 0); // 5♠ +1 charge → Kindling charges 4♠/6♠ → Twin charges 5♥
   const c = (i) => ({ ...g.state.cards[i] });
@@ -51,7 +51,7 @@ if (chain.s4.charge < 1 || chain.s6.charge < 1) fail('Kindling did not charge th
 const wild = await page.evaluate(() => {
   const g = window.__game;
   g.pickMark('wild'); g.tapDeckCard(40); g.placePickedMark();
-  const board = { stock: [], waste: [40], foundations: [[], [], [], []], tableau: Array.from({ length: 7 }, (_, i) => ({ down: [], up: i === 0 ? [41] : [] })), drawCount: 1, redealsLeft: -1, moves: 0, glass: [] }; // 3♣ on t0: same colour
+  const board = { stock: [], waste: [40], foundations: [[], [], [], []], tableau: Array.from({ length: 7 }, (_, i) => ({ down: [], up: i === 0 ? [41] : [] })), drawCount: 1, redealsLeft: -1, moves: 0, glass: [], dealt: 52 }; // 3♣ on t0: same colour
   g.setBoardForTesting(board);
   return g.legalTargets('waste', 0);
 });

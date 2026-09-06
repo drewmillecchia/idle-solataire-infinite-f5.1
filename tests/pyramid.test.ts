@@ -4,7 +4,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { cardId, type CardId } from '$engine/types';
-import { NO_TWISTS, type Twists } from '../src/rules/module';
+import { deckCardIds, JOKER_53, JOKER_ID } from '$engine/deck';
+import { NO_TWISTS, isWildCard, type Twists } from '../src/rules/module';
 import { solveGreedy } from '../src/rules/autoplay';
 import {
   dealPyramid,
@@ -78,6 +79,16 @@ describe('deal', () => {
     expect(dealPyramid(1, { redeals: 'nonsense' }).redealsLeft).toBe(2); // falls back to the default
     expect(dealPyramid(1, {}).redealsLeft).toBe(2);
     expect(dealPyramid(3, { redeals: '0' }).slots).toEqual(dealPyramid(3).slots);
+  });
+
+  it('deals a 53-card (Joker) deck too: every card lands (docs/12)', () => {
+    const b = dealPyramid(1, {}, NO_TWISTS, deckCardIds(JOKER_53));
+    expect(b.slots).toHaveLength(PYRAMID_SLOT_COUNT);
+    expect(b.slots.every((c) => c !== null)).toBe(true);
+    const all = [...(b.slots as CardId[]), ...b.stock];
+    expect(all).toHaveLength(53);
+    expect(new Set(all).size).toBe(53);
+    expect(all).toContain(JOKER_ID);
   });
 });
 
@@ -550,6 +561,21 @@ describe('twists', () => {
     expect(pyramid.honours).toEqual(['wild']);
     expect(pyramid.options.map((o) => o.id)).toEqual(['redeals']);
     expect(pyramid.options[0]?.default).toBe('2');
+  });
+
+  it('the Joker: wild by nature, even under NO_TWISTS (docs/12-ascension.md)', () => {
+    expect(isWildCard(JOKER_ID, NO_TWISTS)).toBe(true);
+
+    const b = withSlots({ 21: JOKER_ID, 22: H(9) });
+    // The Joker pairs with anything exposed, and may also go alone.
+    expect(pyramid.legalTargets(b, 'p21', 0, NO_TWISTS)).toEqual(['discard', 'p22']);
+    expect(pyramid.autoTarget(b, 'p21', 0, NO_TWISTS)).toBe('discard');
+    // ...and anything pairs with an exposed Joker, too.
+    expect(pyramid.legalTargets(b, 'p22', 0, NO_TWISTS)).toEqual(['p21']);
+    const r = pyramid.move(b, 'p22', 0, 'p21', NO_TWISTS);
+    expect(r.changed).toBe(true);
+    expect(r.homed).toEqual([H(9), JOKER_ID]);
+    expect(pyramid.isWon(r.board)).toBe(true);
   });
 });
 

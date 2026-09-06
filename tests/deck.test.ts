@@ -1,24 +1,35 @@
 /**
- * engine/deck.ts: the deck-shape refactor (docs/12-ascension.md, "Sequencing" step 1). Exactly
- * one shape exists — the standard 52 — and everything reads it. These tests are the "no
- * behaviour change" contract: every value here must match what the engine produced before the
- * refactor.
+ * engine/deck.ts: deck shapes (docs/12-ascension.md). The first half of this file is the "no
+ * behaviour change" contract from step 1 — every value must match what the engine produced before
+ * the deck became data. The second half covers step 2: the card universe every shape is a prefix
+ * of, the Joker shape, and what a card with no suit and no rank does to the economy.
  */
 import { describe, expect, it } from 'vitest';
 import { D } from '$engine/numbers';
 import { NUMBERING_ORDER, rankValue } from '$engine/numbering';
-import { cardDef, STANDARD_DECK } from '$engine/types';
+import { cardDef, cardId, STANDARD_DECK } from '$engine/types';
 import type { NumberingId, Rank } from '$engine/types';
 import {
+  ALL_CARDS,
+  DECK_LADDER,
   DECK_SHAPES,
+  JOKER_53,
+  JOKER_ID,
   STANDARD_52,
+  cardDefAnywhere,
   cardDefIn,
+  deckCardIds,
   deckCards,
   deckShape,
-  deckSize
+  deckSize,
+  isJoker,
+  type DeckShape
 } from '$engine/deck';
 import { FACT_52, deckFactorial } from '$engine/permutation';
 import { deserialize } from '$engine/save/serialize';
+import { SAVE_VERSION } from '$engine/state';
+import { derive } from '$engine/economy/derive';
+import { pruneMarksForShape } from '$engine/marks/placement';
 import { migrate } from '$engine/save/migrate';
 
 describe('STANDARD_52 shape', () => {
@@ -183,5 +194,162 @@ describe('save migration and repair read the deck shape', () => {
     const state = deserialize(raw);
     expect(state.cards).toHaveLength(52);
     expect(state.cards[51]).toEqual({ awake: true, charge: 51, marks: [] });
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Step 2 (docs/12-ascension.md): the Joker shape, and the universe every shape is a prefix of.
+// ---------------------------------------------------------------------------------------------
+
+describe('the card universe', () => {
+  it('numbers the first 52 cards exactly as the game always has: S,H,D,C x A..K', () => {
+    // This is a SAVE COMPATIBILITY test, not a style one. Every placed Mark, every homed-this-hand
+    // entry and every constellation payload in a live save is a card id. Reordering the universe
+    // would move all of them onto different cards, silently.
+    const suits = ['S', 'H', 'D', 'C'] as const;
+    ALL_CARDS.slice(0, 52).forEach((card, i) => {
+      expect(card.id).toBe(i);
+      expect(card.suit).toBe(suits[Math.floor(i / 13)]);
+      expect(card.rank).toBe((i % 13) + 1);
+    });
+  });
+
+  it('makes every shape a prefix of the next, so a card id means one card in all of them', () => {
+    for (let i = 1; i < DECK_LADDER.length; i++) {
+      const smaller = DECK_LADDER[i - 1] as DeckShape;
+      const bigger = DECK_LADDER[i] as DeckShape;
+      expect(deckSize(bigger)).toBeGreaterThan(deckSize(smaller));
+      expect(deckCards(bigger).slice(0, deckSize(smaller))).toEqual(deckCards(smaller));
+    }
+  });
+});
+
+describe('JOKER_53', () => {
+  it('is the standard 52 plus one card at id 52', () => {
+    expect(deckSize(JOKER_53)).toBe(53);
+    expect(JOKER_ID).toBe(52);
+    expect(cardDefIn(JOKER_53, JOKER_ID)).toEqual({ id: 52, suit: 'J', rank: 0 });
+    expect(deckCardIds(JOKER_53)).toHaveLength(53);
+  });
+
+  it('holds the one card that is wild by nature, and no other', () => {
+    expect(isJoker(JOKER_ID)).toBe(true);
+    for (let id = 0; id < 52; id++) expect(isJoker(id)).toBe(false);
+  });
+
+  it('is not in the standard deck, though the universe still knows it', () => {
+    expect(() => cardDefIn(STANDARD_52, JOKER_ID)).toThrow(RangeError);
+    expect(cardDefAnywhere(JOKER_ID).suit).toBe('J');
+    expect(deckShape('joker-53')).toBe(JOKER_53);
+  });
+
+  it('has 53! as its journey target', () => {
+    let expected = 1n;
+    for (let i = 2n; i <= 53n; i++) expected *= i;
+    expect(deckFactorial(JOKER_53)).toBe(expected);
+    expect(deckFactorial(JOKER_53)).toBe(deckFactorial(STANDARD_52) * 53n);
+  });
+});
+
+describe('a card with no rank of its own', () => {
+  it('is worth the average rank under every numbering system, exactly', () => {
+    // 91 / 13 = 7. The point is that it is the SAME 7 under tetration, where rank 13 holds the
+    // whole 91 — a Joker that copied the top rank would double the deck's output on arrival.
+    for (const id of NUMBERING_ORDER) {
+      expect(rankValue(id, 0).toNumber()).toBeCloseTo(7, 9);
+    }
+  });
+
+  it('leaves every real rank value untouched', () => {
+    expect(rankValue('natural', 13).eq(13)).toBe(true);
+    expect(rankValue('natural', 1).eq(1)).toBe(true);
+  });
+});
+
+describe('a card with no suit', () => {
+  function jokerState() {
+    // Through the save path, so the repair pass is what sizes the deck to 53 — the same route a
+    // real Ascension save would take.
+    const st = deserialize(JSON.stringify({ version: SAVE_VERSION, deck: 'joker-53' }));
+    for (const c of st.cards) c.awake = true;
+    return st;
+  }
+
+  it('deserializes to a 53-card deck', () => {
+    const st = jokerState();
+    expect(st.deck).toBe('joker-53');
+    expect(st.cards).toHaveLength(53);
+  });
+
+  it('earns exactly what an average rank earns — the same as the seven, under Natural', () => {
+    const st = jokerState();
+    const d = derive(st);
+    expect(d.perCard[JOKER_ID]?.toNumber()).toBeCloseTo(d.perCard[cardId('S', 7)]?.toNumber() ?? 0, 9);
+  });
+
+  it('takes no suit multiplier: a Lantern on it lifts nothing', () => {
+    const plain = derive(jokerState()).deckRate;
+
+    const onJoker = jokerState();
+    onJoker.marks.placed = [{ mark: 'lantern', cards: [JOKER_ID] }];
+    expect(derive(onJoker).deckRate.eq(plain)).toBe(true);
+
+    // ... whereas the same Lantern on a suited card lifts that whole suit, which is what makes the
+    // assertion above a real one rather than a Lantern that never works.
+    const onSpade = jokerState();
+    onSpade.marks.placed = [{ mark: 'lantern', cards: [cardId('S', 7)] }];
+    expect(derive(onSpade).deckRate.gt(plain)).toBe(true);
+  });
+
+  it('is never the favored or a laggard suit, however much charge it carries', () => {
+    const st = jokerState();
+    const joker = st.cards[JOKER_ID];
+    if (joker) joker.charge = 10_000;
+    // Favored/laggard suits are chosen from the four suits; an unsuited card contributes to no
+    // suit total, so a Joker with all the charge in the deck cannot tip that choice.
+    const withCharge = derive(st);
+    const without = derive(jokerState());
+    expect(withCharge.mults.suit).toEqual(without.mults.suit);
+  });
+});
+
+describe('marks across a change of shape', () => {
+  it('keeps a mark on the Joker while the deck holds it', () => {
+    const raw = JSON.stringify({
+      version: SAVE_VERSION,
+      deck: 'joker-53',
+      marks: { placed: [{ mark: 'lantern', cards: [JOKER_ID] }] }
+    });
+    const st = deserialize(raw);
+    expect(st.marks.placed).toEqual([{ mark: 'lantern', cards: [JOKER_ID] }]);
+    expect(st.cards[JOKER_ID]?.marks).toEqual(['lantern']);
+  });
+
+  it('drops that same mark when the save is read against a deck without the card', () => {
+    const raw = JSON.stringify({
+      version: SAVE_VERSION,
+      deck: 'standard-52',
+      marks: { placed: [{ mark: 'lantern', cards: [JOKER_ID] }, { mark: 'tithe', cards: [3] }] }
+    });
+    const st = deserialize(raw);
+    expect(st.marks.placed).toEqual([{ mark: 'tithe', cards: [3] }]);
+  });
+
+  it('prunes a Twin whole rather than leaving half a wire', () => {
+    const st = deserialize(JSON.stringify({ version: SAVE_VERSION, deck: 'joker-53' }));
+    st.marks.placed = [
+      { mark: 'twin', cards: [3, JOKER_ID] },
+      { mark: 'lantern', cards: [4] }
+    ];
+    st.deck = 'standard-52';
+    expect(pruneMarksForShape(st)).toBe(1);
+    expect(st.marks.placed).toEqual([{ mark: 'lantern', cards: [4] }]);
+    expect(st.cards[3]?.marks).toEqual([]);
+  });
+
+  it('prunes nothing when every marked card is still in the deck', () => {
+    const st = deserialize(JSON.stringify({ version: SAVE_VERSION, deck: 'standard-52' }));
+    st.marks.placed = [{ mark: 'lantern', cards: [4] }];
+    expect(pruneMarksForShape(st)).toBe(0);
   });
 });

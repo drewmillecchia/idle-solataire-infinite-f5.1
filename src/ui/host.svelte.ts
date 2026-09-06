@@ -19,7 +19,8 @@ import {
   nodeLevel, nodeCost, canBuyNode, buyNode, visibleNodes,
   attachMarks, twistsFor, availableMarks, canPlace, placeMark, removeMark, placementFor, markSlots, usedSlots, markDef,
   canReshuffle, permutationsOnReshuffle, reshufflePotential, reshuffleThreshold, cycleCuts, performReshuffle,
-  numberingOptions, unlockNumbering, selectNumbering, journeyFraction, arrangementIndex, LOG10_FACT_52
+  numberingOptions, unlockNumbering, selectNumbering, journeyFraction, arrangementIndex, LOG10_FACT_52,
+  deckShape, deckCardIds, deckSize
 } from '$engine/index';
 import { MILESTONES, FEEL, MARKS, type Feel } from '$content/index';
 import { WAYS } from '$content/ways';
@@ -159,7 +160,12 @@ export class GameHost implements TableHost {
     this.state = createInitialState(Date.now());
     this.derived = derive(this.state);
     this.module = (gameById('klondike') ?? GAMES[0]) as GameModule<unknown>;
-    this.board = this.module.deal(mulberry32(1), this.config(), twistsFor(this.state));
+    this.board = this.module.deal(
+      mulberry32(1),
+      this.config(),
+      twistsFor(this.state),
+      deckCardIds(deckShape(this.state.deck))
+    );
     this.bus.on((e) => this.onEvent(e));
     this.detachMarks = attachMarks(this.state, this.bus);
   }
@@ -324,7 +330,9 @@ export class GameHost implements TableHost {
   }
   private adoptBlob(blob: string): void {
     const st = deserialize(blob);
-    if (!Array.isArray(st.cards) || st.cards.length < 52) return;
+    // "Is this a real save": the card count is measured against the shape the save itself names,
+    // not a literal 52, so a deck that is not the standard one is not mistaken for a broken file.
+    if (!Array.isArray(st.cards) || st.cards.length < deckSize(deckShape(st.deck))) return;
     this.state = st;
     this.reattachMarks();
     this.derived = derive(st);
@@ -360,7 +368,7 @@ export class GameHost implements TableHost {
     try { raw = JSON.parse(atob(s.trim())); } catch { return false; }
     if (!raw || typeof raw !== 'object' || !('lifetimeShuffles' in raw) || !('cards' in raw)) return false;
     const st = importString(s.trim());
-    if (!Array.isArray(st.cards) || st.cards.length < 52) return false;
+    if (!Array.isArray(st.cards) || st.cards.length < deckSize(deckShape(st.deck))) return false;
     this.state = st;
     this.reattachMarks();
     this.derived = derive(st);
@@ -416,7 +424,12 @@ export class GameHost implements TableHost {
   private dealSeed(seed: number, silent: boolean, count: boolean): void {
     if (this.cutting) return;
     this.seed = seed;
-    this.board = this.module.deal(mulberry32(this.seed), this.config(), this.twists());
+    this.board = this.module.deal(
+      mulberry32(this.seed),
+      this.config(),
+      this.twists(),
+      deckCardIds(deckShape(this.state.deck))
+    );
     this.history = [];
     this.handMoves = 0;
     this.handStartedAt = performance.now();

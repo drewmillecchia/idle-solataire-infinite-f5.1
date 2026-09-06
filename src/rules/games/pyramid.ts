@@ -38,14 +38,17 @@
  * Note on difficulty: raw Pyramid is won well under 5 % of the time (docs/06-games.md). That is the
  * design; the greedy driver is expected to lose almost every deal, and only has to terminate.
  */
-import { cardDef, STANDARD_DECK } from '$engine/types';
+import { cardDef } from '$engine/types';
 import type { CardId } from '$engine/types';
+import { deckCardIds, STANDARD_52 } from '$engine/deck';
 import { mulberry32, shuffle } from '$engine/rng';
 import {
   noop,
   optionValue,
+  isWildCard,
   NO_TWISTS,
   type BoardView,
+  type DealDeck,
   type GameConfig,
   type GameModule,
   type GameOption,
@@ -191,13 +194,13 @@ function rankOf(card: CardId): number {
 
 /** Two exposed cards leave together when their ranks add to 13. A Wild pairs with anything. */
 export function pairsTo13(a: CardId, b: CardId, twists: Twists): boolean {
-  if (twists.isWild(a) || twists.isWild(b)) return true;
+  if (isWildCard(a, twists) || isWildCard(b, twists)) return true;
   return rankOf(a) + rankOf(b) === 13;
 }
 
 /** A King is 13 by itself — and so is a Wild. */
 export function discardsAlone(card: CardId, twists: Twists): boolean {
-  return twists.isWild(card) || rankOf(card) === 13;
+  return isWildCard(card, twists) || rankOf(card) === 13;
 }
 
 // ------------------------------------------------------------------ clone ---
@@ -236,14 +239,12 @@ function redealsOf(config: GameConfig | undefined): number {
   return Number.isFinite(n) ? n : 2;
 }
 
-function dealWith(rng: () => number, config: GameConfig, _twists: Twists): PyramidBoard {
-  const deck = shuffle(
-    STANDARD_DECK.map((c) => c.id),
-    rng
-  );
-  const slots: (CardId | null)[] = deck.slice(0, PYRAMID_SLOT_COUNT).map((c) => c ?? null);
-  // 24 left over; reversed so the TOP (playable, next to turn) is the last element.
-  const stock = deck.slice(PYRAMID_SLOT_COUNT).reverse();
+function dealWith(rng: () => number, config: GameConfig, _twists: Twists, deck: DealDeck): PyramidBoard {
+  const shuffled = shuffle(deck, rng);
+  const slots: (CardId | null)[] = shuffled.slice(0, PYRAMID_SLOT_COUNT).map((c) => c ?? null);
+  // Whatever is left over (24 for the standard 52); reversed so the TOP (playable, next to turn)
+  // is the last element.
+  const stock = shuffled.slice(PYRAMID_SLOT_COUNT).reverse();
   return {
     slots,
     stock,
@@ -254,9 +255,14 @@ function dealWith(rng: () => number, config: GameConfig, _twists: Twists): Pyram
   };
 }
 
-/** Convenience for tests, the sim and bug reports: a seeded Pyramid deal. */
-export function dealPyramid(seed: number, config?: GameConfig, twists?: Twists): PyramidBoard {
-  return dealWith(mulberry32(seed), config ?? {}, twists ?? NO_TWISTS);
+/** Convenience for tests, the sim and bug reports: a seeded Pyramid deal off the standard 52. */
+export function dealPyramid(
+  seed: number,
+  config?: GameConfig,
+  twists?: Twists,
+  deck?: DealDeck
+): PyramidBoard {
+  return dealWith(mulberry32(seed), config ?? {}, twists ?? NO_TWISTS, deck ?? deckCardIds(STANDARD_52));
 }
 
 // ------------------------------------------------------------------- view ---
@@ -495,8 +501,8 @@ export const pyramid: GameModule<PyramidBoard> = {
   options: OPTIONS,
   honours: ['wild'],
 
-  deal(rng, config, twists) {
-    return dealWith(rng, config, twists);
+  deal(rng, config, twists, deck) {
+    return dealWith(rng, config, twists, deck);
   },
 
   view(board) {

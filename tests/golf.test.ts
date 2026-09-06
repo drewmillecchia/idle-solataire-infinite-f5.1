@@ -4,7 +4,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { cardId, type CardId } from '$engine/types';
-import { FAN_UP, NO_TWISTS, type Twists } from '../src/rules/module';
+import { deckCardIds, JOKER_53, JOKER_ID } from '$engine/deck';
+import { FAN_UP, NO_TWISTS, isWildCard, type Twists } from '../src/rules/module';
 import { solveGreedy } from '../src/rules/autoplay';
 import {
   dealGolf,
@@ -73,6 +74,16 @@ describe('deal', () => {
     expect(dealGolf(1, {}).wrap).toBe(false);
     // the same seed deals the same cards whichever way the option goes
     expect(dealGolf(3, { wrap: 'yes' }).columns).toEqual(dealGolf(3).columns);
+  });
+
+  it('deals a 53-card (Joker) deck too: every card lands (docs/12)', () => {
+    const b = dealGolf(1, {}, NO_TWISTS, deckCardIds(JOKER_53));
+    expect(b.columns).toHaveLength(GOLF_COLUMNS);
+    for (const c of b.columns) expect(c).toHaveLength(GOLF_COLUMN_HEIGHT);
+    const all = [...b.columns.flat(), ...b.stock, ...b.waste];
+    expect(all).toHaveLength(53);
+    expect(new Set(all).size).toBe(53);
+    expect(all).toContain(JOKER_ID);
   });
 });
 
@@ -336,6 +347,19 @@ describe('twists', () => {
     expect(golf.honours).toEqual(['wild']);
     expect(golf.options.map((o) => o.id)).toEqual(['wrap']);
     expect(golf.options[0]?.default).toBe('no');
+  });
+
+  it('the Joker: wild by nature, even under NO_TWISTS (docs/12-ascension.md)', () => {
+    expect(isWildCard(JOKER_ID, NO_TWISTS)).toBe(true);
+
+    const b = withCols({ 0: [JOKER_ID], 1: [H(9)] }, { waste: [D(2)] });
+    // The Joker plays onto any waste top, regardless of rank.
+    expect(golf.legalTargets(b, 't0', 0, NO_TWISTS)).toEqual(['waste']);
+    const r = golf.move(b, 't0', 0, 'waste', NO_TWISTS);
+    expect(r.changed).toBe(true);
+    expect(r.homed).toEqual([JOKER_ID]);
+    // ...and now the Joker is the waste top, so anything plays onto it.
+    expect(golf.legalTargets(r.board, 't1', 0, NO_TWISTS)).toEqual(['waste']);
   });
 });
 

@@ -10,7 +10,7 @@ await page.waitForFunction(() => window.__game && window.__game.table);
 await page.waitForTimeout(500);
 await page.evaluate(() => {
   const f = (s) => Array.from({ length: 13 }, (_, i) => s * 13 + i);
-  const board = { stock: [], waste: [51], foundations: [f(0), f(1), f(2), f(3).slice(0, 12)], tableau: Array.from({ length: 7 }, () => ({ down: [], up: [] })), drawCount: 1, redealsLeft: -1, moves: 0, glass: [] };
+  const board = { stock: [], waste: [51], foundations: [f(0), f(1), f(2), f(3).slice(0, 12)], tableau: Array.from({ length: 7 }, () => ({ down: [], up: [] })), drawCount: 1, redealsLeft: -1, moves: 0, glass: [], dealt: 52 };
   window.__game.setBoardForTesting(board);
 });
 await page.waitForTimeout(400);

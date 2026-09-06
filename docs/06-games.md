@@ -11,7 +11,8 @@ against every registry entry.
 interface GameModule<B> {
   id: string; name: string; blurb: string;
   options: GameOption[];                       // declared settings, rendered generically
-  deal(rng, config, twists): B;                // twists = active rule-twist Marks
+  deal(rng, config, twists, deck): B;          // twists = active rule-twist Marks; deck = the
+                                               // active shape's card ids (docs/12), never 52
   view(board): BoardView;                      // piles on a grid measured in card units
   canPickUp(board, pile, index): boolean;
   legalTargets(board, pile, index): string[];  // for glow + throw catch

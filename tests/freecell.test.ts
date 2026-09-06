@@ -5,7 +5,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { cardId, type CardId } from '$engine/types';
-import { NO_TWISTS, type Twists } from '../src/rules/module';
+import { deckCardIds, JOKER_53, JOKER_ID } from '$engine/deck';
+import { NO_TWISTS, isWildCard, type Twists } from '../src/rules/module';
 import { solveGreedy } from '../src/rules/autoplay';
 import {
   dealFreeCell,
@@ -29,6 +30,7 @@ function board(p: Partial<FreeCellBoard> = {}): FreeCellBoard {
     foundations: [[], [], [], []],
     tableau: Array.from({ length: FREECELL_TABLEAU_COUNT }, () => [] as CardId[]),
     moves: 0,
+    dealt: 52,
     ...p
   };
 }
@@ -79,6 +81,18 @@ describe('deal', () => {
     expect(dealFreeCell(1, { cells: 'nonsense' }).cells).toHaveLength(4); // falls back to default
     // the same seed deals the same cards whichever way the option goes
     expect(dealFreeCell(3, { cells: '2' }).tableau).toEqual(dealFreeCell(3).tableau);
+  });
+
+  it('deals a 53-card (Joker) deck too: every card lands, `dealt` tracks it (docs/12)', () => {
+    const b = dealFreeCell(1, {}, NO_TWISTS, deckCardIds(JOKER_53));
+    const all = b.tableau.flat();
+    expect(all).toHaveLength(53);
+    expect(new Set(all).size).toBe(53);
+    expect(all).toContain(JOKER_ID);
+    expect(b.dealt).toBe(53);
+    // round-robin over 8 columns: 53 = 6*8 + 5, so five columns get 7 and three get 6.
+    expect(b.tableau.map((c) => c.length).sort()).toEqual([6, 6, 6, 7, 7, 7, 7, 7]);
+    expect(freecell.isWon(b)).toBe(false);
   });
 });
 
@@ -284,6 +298,23 @@ describe('isWon / isStuck', () => {
     expect(freecell.isWon(board())).toBe(false);
   });
 
+  it('wins when every DEALT card is home, not when foundations hit a hardcoded 52', () => {
+    // A hand smaller than 52 (a future, smaller deck shape): 2 dealt, one 2-card suit run.
+    const small = board({ foundations: [[S(1), S(2)], [], [], []], dealt: 2 });
+    expect(freecell.isWon(small)).toBe(true);
+
+    // A hand bigger than 52 (the Joker, docs/12): all four foundations full is 52 cards home,
+    // but a 53rd dealt card (the Joker) still sitting in a cell means the hand is not won.
+    const full = (suit: 'S' | 'H' | 'D' | 'C') => Array.from({ length: 13 }, (_, i) => cardId(suit, (i + 1) as 1));
+    const withJoker = board({
+      foundations: [full('S'), full('H'), full('D'), full('C')],
+      cells: [JOKER_ID, null, null, null],
+      dealt: 53
+    });
+    expect(withJoker.foundations.every((f) => f.length === 13)).toBe(true);
+    expect(freecell.isWon(withJoker)).toBe(false);
+  });
+
   it('is stuck only when no cell, foundation, or tableau move exists anywhere', () => {
     // Every free cell full; every column non-empty; no pair of tops is rank-adjacent; no top is an
     // Ace (foundations are empty and want Aces).
@@ -358,6 +389,37 @@ describe('twists', () => {
     expect(freecell.honours).toEqual(['wild', 'mirror']);
     expect(freecell.options.map((o) => o.id)).toEqual(['cells']);
     expect(freecell.options[0]?.default).toBe('4');
+  });
+
+  it('the Joker: wild by nature, even under NO_TWISTS (docs/12-ascension.md)', () => {
+    expect(isWildCard(JOKER_ID, NO_TWISTS)).toBe(true);
+
+    // Stacks regardless of rank or colour, exactly like a Mark-made wild card.
+    const b = withCols({ 0: [S(9)], 1: [JOKER_ID] });
+    expect(freecell.legalTargets(b, 't1', 0, NO_TWISTS)).toContain('t0');
+    const r = freecell.move(b, 't1', 0, 't0', NO_TWISTS);
+    expect(r.changed).toBe(true);
+    expect(r.board.tableau[0]).toEqual([S(9), JOKER_ID]);
+
+    // And anything now stacks on the Joker in turn.
+    const onTop = withCols({ 0: [JOKER_ID], 1: [S(2)] });
+    expect(freecell.legalTargets(onTop, 't1', 0, NO_TWISTS)).toContain('t0');
+
+    // A card with no rank of its own cannot stand in for a rank, so a half-built foundation will
+    // not take it — it would strand the real card of whatever rank it displaced.
+    const found = board({ foundations: [[S(1), S(2)], [], [], []] });
+    const withJokerInCell = { ...found, cells: [JOKER_ID, null, null, null] as (CardId | null)[] };
+    const targets = freecell.legalTargets(withJokerInCell, 'c0', 0, NO_TWISTS);
+    expect(targets).not.toContain('f0');
+    expect(targets).not.toContain('f1');
+
+    // A complete foundation takes it, and that is how the 53rd card gets home.
+    const done = board({ foundations: [Array.from({ length: 13 }, (_, i) => S(i + 1)), [], [], []] });
+    const jokerInCell = { ...done, cells: [JOKER_ID, null, null, null] as (CardId | null)[] };
+    expect(freecell.legalTargets(jokerInCell, 'c0', 0, NO_TWISTS)).toContain('f0');
+    const crowned = freecell.move(jokerInCell, 'c0', 0, 'f0', NO_TWISTS);
+    expect(crowned.changed).toBe(true);
+    expect(crowned.board.foundations[0]).toHaveLength(14);
   });
 });
 

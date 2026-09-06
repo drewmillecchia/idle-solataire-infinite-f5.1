@@ -32,13 +32,16 @@ const NEARLY_WON = {
     return { columns, stock: [], waste: [44], wrap: false, moves: 0 };
   },
   freecell: () => {
-    // Every foundation to the queen; the four kings sit in the free cells.
+    // Every foundation to the queen; the four kings sit in the free cells. `dealt` is what the
+    // win check counts against (a deck is not always 52 — docs/12-ascension.md), so a hand-built
+    // board must state it or it can never be won.
     const f = (suit) => Array.from({ length: 12 }, (_, i) => suit * 13 + i);
     return {
       cells: [12, 25, 38, 51],
       foundations: [f(0), f(1), f(2), f(3)],
       tableau: Array.from({ length: 8 }, () => []),
-      moves: 0
+      moves: 0,
+      dealt: 52
     };
   }
 };

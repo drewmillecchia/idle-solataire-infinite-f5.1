@@ -87,3 +87,34 @@ sim as tests. **Real-gesture browser tests** (playwright-core + chrome-headless-
 on this machine) that drive pointer events at the Pixi canvas and assert on engine state — every
 interaction bug in prior builds lived at the engine/host seam. Screenshot checks at 1180×820 (iPad
 landscape) and 1440×900.
+
+## ADR-015 — One append-only card universe; every deck shape is a prefix of it
+*2026-09-06, with step 2 of [12-ascension.md](12-ascension.md).*
+
+Ascension grows the deck: 52 cards, then 53 with the Joker, then 65 with a fifth suit. The question
+is what a **card id** means when the deck can change under a save.
+
+**Decided:** there is exactly one ordered universe of cards in `engine/deck.ts`, ids are indices into
+it, and a `DeckShape` is a **prefix** — the standard 52 is the first 52, the Joker deck is those plus
+id 52. New cards are only ever *appended*. Three things follow, and they are the whole reason:
+
+- A card id means the same card in every shape, so a Mark placed on the seven of hearts is still on
+  the seven of hearts after an Ascension. Placements only need dropping when a shape *shrinks*.
+- `state.cards` stays a dense array indexed by id.
+- `cardDef(id)` needs no shape argument, so games, marks, the renderer and the a11y layer never
+  thread one. Only `deal` learns about the shape, via the deck it is handed.
+
+**Rejected:** per-shape ids (0..n-1 rebuilt per shape) — the fifth suit would renumber the Joker, and
+every save's Marks would land on different cards, silently. Also rejected: ids computed as
+`suitIndex * 13 + rank`, which cannot express a card that has no suit or no rank.
+
+**The rule this leaves:** never insert into the middle of the universe, and never reorder it. A test
+in `tests/deck.test.ts` pins the first 52 entries for exactly that reason.
+
+**Consequences.** `CardDef.suit` is `CardSuit = Suit | 'J'` and `CardDef.rank` is `CardRank =
+Rank | 0`: the Joker has neither. That widening is deliberate — the type checker then lists every
+place that indexes by suit or rank, and each one has to answer what an unsuited, unranked card does
+there. The answers so far: it takes no suit multiplier and joins no per-suit total (`isSuited`), it
+is worth the *average* rank under every numbering system (a Joker that copied the top rank would
+double the deck's output under Tetration, where rank 13 holds all 91), Kindling on it warms nothing,
+and it is wild in every game by nature rather than by a Mark (`isWildCard` in `rules/module.ts`).

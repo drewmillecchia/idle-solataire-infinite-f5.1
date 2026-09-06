@@ -15,7 +15,7 @@
   </div>
   <div class="stat">
     <span class="label">Awake</span>
-    <span class="num value">{host.view.awake}<span class="dim">/52</span></span>
+    <span class="num value">{host.view.awake}<span class="dim">/{host.view.deck.length}</span></span>
   </div>
   {#if host.view.cut.revealed}
     <div class="stat">

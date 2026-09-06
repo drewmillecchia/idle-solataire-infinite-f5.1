@@ -5,6 +5,7 @@
  *
  * Rules are IMMUTABLE and PURE. A move returns a fresh board. The module owns clone() and hash().
  */
+import { isJoker } from '$engine/deck';
 import type { CardId } from '$engine/types';
 
 export type PileKind = 'stock' | 'waste' | 'foundation' | 'tableau' | 'cell' | 'peak' | 'discard';
@@ -76,6 +77,14 @@ export interface GameOption {
 }
 export type GameConfig = Record<string, string>;
 
+/**
+ * The cards a hand is dealt from, in deck order before the module shuffles them. The host passes
+ * the active deck shape's ids (`deckCardIds` in `$engine/deck`), so a game never assumes 52 —
+ * docs/12-ascension.md. A module deals EVERY card it is handed: what does not fit the layout goes
+ * to the stock, and a game whose win condition counts cards must count `deck.length`, not 52.
+ */
+export type DealDeck = readonly CardId[];
+
 /** Rule-twist Marks the module MAY consult. A module that ignores twists is still valid. */
 export interface Twists {
   isWild(card: CardId): boolean;
@@ -83,6 +92,15 @@ export interface Twists {
   dealtFaceUp(card: CardId): boolean;
 }
 export const NO_TWISTS: Twists = { isWild: () => false, isMirror: () => false, dealtFaceUp: () => false };
+
+/**
+ * Is this card wild right now? A Mark can make any card wild; the Joker is wild by nature, in
+ * every game, whether or not the host passed twists (docs/12-ascension.md). Games ask THIS, not
+ * `twists.isWild`, so the natural case cannot be forgotten in one game and honoured in another.
+ */
+export function isWildCard(card: CardId, twists: Twists): boolean {
+  return twists.isWild(card) || isJoker(card);
+}
 
 export interface GameModule<B = unknown> {
   id: string;
@@ -92,7 +110,7 @@ export interface GameModule<B = unknown> {
   /** Which twist kinds this game honours (for UI hints). */
   honours: ('wild' | 'mirror' | 'glass')[];
 
-  deal(rng: () => number, config: GameConfig, twists: Twists): B;
+  deal(rng: () => number, config: GameConfig, twists: Twists, deck: DealDeck): B;
   view(board: B): BoardView;
 
   canPickUp(board: B, pile: string, index: number, twists: Twists): boolean;

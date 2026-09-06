@@ -60,8 +60,15 @@ are decisions rather than more of the same: Comeback pays *more* while little is
 Favored Suit pull against each other, Fresh Cards pulls against Patience. Night Watch is the first node
 that changes a rule rather than a number — the dealer stops waiting for you to look away.
 
+## Ascension — steps 1 and 2 ✅ (2026-09-05, 2026-09-06)
+The deck is data, not a 52 the engine assumes: one append-only card universe, every deck shape a prefix
+of it ([ADR-015](03-decisions.md)), the Joker shape defined, games dealt their cards rather than helping
+themselves to the standard deck, and a card with no suit and no rank answered for everywhere it appears
+— economy, marks, faces, accessibility. **Step 3 is the layer itself**: `performAscend`, the ceremony,
+the Journey bar re-scaled to 53!. See [12-ascension.md](12-ascension.md).
+
 ## Later
-Ascension (Joker → Stars ★), FreeCell, Spider, real auth, leaderboards-that-matter, DynamoDB store,
+Stars ★ and the suits beyond the Joker, Spider, real auth, leaderboards-that-matter, DynamoDB store,
 Gambler Mark fizzle, Idle Riffle toy, sound design pass with samples, a hint that replays the Scholar's line.
 
 ## Build discipline

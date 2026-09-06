@@ -4,16 +4,17 @@
  * Table accessibility per docs/03-decisions.md ADR-003: the canvas has none, so this text layer
  * is the whole of it.
  */
-import type { CardId, Suit } from '$engine/types';
+import type { CardId, CardSuit } from '$engine/types';
 import { cardDef } from '$engine/types';
 import type { BoardView, PileKind, PileView } from '$rules/module';
 
-function suitName(suit: Suit): string {
+function suitName(suit: CardSuit): string {
   switch (suit) {
     case 'S': return 'spades';
     case 'H': return 'hearts';
     case 'D': return 'diamonds';
     case 'C': return 'clubs';
+    case 'J': return 'jokers';
     default: return suit;
   }
 }
@@ -28,11 +29,30 @@ function rankName(rank: number): string {
   }
 }
 
-/** "Ace of spades", "King of clubs". */
+/** "Ace of spades", "King of clubs" — and just "Joker" for a card with neither rank nor suit. */
 export function describeCard(id: CardId): string {
   const def = cardDef(id);
+  if (def.suit === 'J') return 'Joker';
   return `${rankName(def.rank)} of ${suitName(def.suit)}`;
 }
+
+const SUIT_GLYPH: Record<CardSuit, string> = { S: '\u2660', H: '\u2665', D: '\u2666', C: '\u2663', J: '\u003f' };
+
+/**
+ * The short tag a panel prints for a card: "7\u2665", "K\u2660", and just "?" for the card with no rank and
+ * no suit. Built from `cardDef`, NOT from `id % 13` arithmetic, which stops being true the moment a
+ * deck holds a card outside the suit x rank grid (docs/12-ascension.md).
+ */
+export function cardTag(id: CardId): string {
+  const def = cardDef(id);
+  if (def.suit === 'J') return SUIT_GLYPH.J;
+  const rank = RANK_TAG[def.rank] ?? String(def.rank);
+  return `${rank}${SUIT_GLYPH[def.suit]}`;
+}
+
+const RANK_TAG: Record<number, string> = {
+  1: 'A', 11: 'J', 12: 'Q', 13: 'K'
+};
 
 function kindLabel(kind: PileKind): string {
   switch (kind) {

@@ -38,7 +38,11 @@ await page.evaluate(() => {
   let a = 7;
   const rng = () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   const twists = { isWild: () => false, isMirror: () => false, dealtFaceUp: () => false };
-  window.__game.setBoardForTesting(mod.deal(rng, {}, twists));
+  // The standard 52's ids are always 0..51 (engine/deck.ts: every deck shape is a prefix of the
+  // universe, and the standard grid is appended first) — a fact this probe can rely on directly,
+  // since it runs against a production build and has no import path to $engine/deck.
+  const deck = Array.from({ length: 52 }, (_, i) => i);
+  window.__game.setBoardForTesting(mod.deal(rng, {}, twists, deck));
 });
 await page.waitForTimeout(500);
 let before = await board();

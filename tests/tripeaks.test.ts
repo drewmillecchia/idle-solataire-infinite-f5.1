@@ -4,7 +4,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { cardId, type CardId } from '$engine/types';
-import { NO_TWISTS, type Twists } from '../src/rules/module';
+import { deckCardIds, JOKER_53, JOKER_ID } from '$engine/deck';
+import { NO_TWISTS, isWildCard, type Twists } from '../src/rules/module';
 import { solveGreedy } from '../src/rules/autoplay';
 import {
   dealTriPeaks,
@@ -102,6 +103,16 @@ describe('deal', () => {
     // a face-up bottom-row card needs no glass entry
     const exposedCard = plain.slots[18] as CardId;
     expect(dealTriPeaks(4, {}, glassTwists(exposedCard)).glass).toEqual([]);
+  });
+
+  it('deals a 53-card (Joker) deck too: every card lands (docs/12)', () => {
+    const b = dealTriPeaks(4, {}, NO_TWISTS, deckCardIds(JOKER_53));
+    expect(b.slots).toHaveLength(28);
+    expect(b.slots.every((c) => c !== null)).toBe(true);
+    const all = [...(b.slots as CardId[]), ...b.stock, ...b.waste];
+    expect(all).toHaveLength(53);
+    expect(new Set(all).size).toBe(53);
+    expect(all).toContain(JOKER_ID);
   });
 });
 
@@ -382,6 +393,19 @@ describe('twists', () => {
   it('honours wild and glass only', () => {
     expect(tripeaks.honours).toEqual(['wild', 'glass']);
     expect(tripeaks.options).toEqual([]);
+  });
+
+  it('the Joker: wild by nature, even under NO_TWISTS (docs/12-ascension.md)', () => {
+    expect(isWildCard(JOKER_ID, NO_TWISTS)).toBe(true);
+
+    const b = withSlots({ 18: JOKER_ID, 19: H(9) }, { waste: [D(2)] });
+    // The Joker plays onto any waste top, regardless of rank.
+    expect(tripeaks.legalTargets(b, 'p18', 0, NO_TWISTS)).toEqual(['waste']);
+    const r = tripeaks.move(b, 'p18', 0, 'waste', NO_TWISTS);
+    expect(r.changed).toBe(true);
+    expect(r.homed).toEqual([JOKER_ID]);
+    // ...and now the Joker is the waste top, so anything plays onto it.
+    expect(tripeaks.legalTargets(r.board, 'p19', 0, NO_TWISTS)).toEqual(['waste']);
   });
 
   it('drops a card from glass once it is exposed or played', () => {

@@ -7,7 +7,7 @@ import { CONSTELLATION, UPGRADES } from '$content/index';
 import { deckShape, deckSize } from '../deck';
 import { D } from '../numbers';
 import { rankValue } from '../numbering';
-import { cardDef, SUITS } from '../types';
+import { cardDef, isSuited, SUITS } from '../types';
 import type { Suit } from '../types';
 import type { GameState } from '../state';
 import { cardsWithMark, markSlotsFrom } from '../marks/placement';
@@ -100,9 +100,12 @@ export function derive(state: GameState): Derived {
 
   // Per-suit total charge (a proxy for "how much you've played this suit"), used by the tier 2
   // suit-specialisation upgrades below. Ties break on SUITS' own order (stable sort).
+  // An unsuited card (the Joker) belongs to no suit, so it counts toward none of these totals
+  // and can never be the favored or a laggard suit — `isSuited` is that decision, made once.
   const suitChargeSum: Record<Suit, number> = { S: 0, H: 0, D: 0, C: 0 };
   cardStates.forEach((c, id) => {
-    suitChargeSum[cardDef(id).suit] += c.charge;
+    const s = cardDef(id).suit;
+    if (isSuited(s)) suitChargeSum[s] += c.charge;
   });
   const suitsByCharge = [...SUITS].sort((a, b) => suitChargeSum[a] - suitChargeSum[b]);
   const laggardSuits = new Set(suitsByCharge.slice(0, 2));
@@ -263,11 +266,13 @@ export function derive(state: GameState): Derived {
   for (const id of cardsWithMark(state, 'lantern')) {
     if (!cardStates[id]?.awake) continue;
     const s = cardDef(id).suit;
+    if (!isSuited(s)) continue; // a Lantern on an unsuited card lights nothing
     suit[s] = suit[s].times(1.5);
   }
   const titheCards = new Set(cardsWithMark(state, 'tithe'));
   for (const id of titheCards) {
     const s = cardDef(id).suit;
+    if (!isSuited(s)) continue; // ... and a Tithe on one still costs its own output, below
     suit[s] = suit[s].times(1.25);
   }
 
@@ -279,6 +284,7 @@ export function derive(state: GameState): Derived {
     const compassCard = cardStates[id];
     if (!compassCard?.awake) continue;
     const compassSuit = cardDef(id).suit;
+    if (!isSuited(compassSuit)) continue; // an unsuited card has no suit to point at
     let lowestId = -1;
     let lowestCharge = Infinity;
     cardStates.forEach((c, cid) => {
@@ -297,12 +303,15 @@ export function derive(state: GameState): Derived {
     if (!card.awake) return D(0);
     if (titheCards.has(id)) return D(0);
     const { suit: cardSuit, rank } = cardDef(id);
+    // The unsuited card takes no suit multiplier: it earns its (average) rank value and the
+    // whole-deck multipliers, and nothing a suit-specialisation upgrade does reaches it.
+    const suitMult = isSuited(cardSuit) ? suit[cardSuit] : D(1);
     const base = rankValue(state.numbering, rank);
     const effCharge = chargeOverride.get(id) ?? card.charge;
     const slope = chargeSlope + (rank >= 11 ? chargeSlopeFace : 0);
     const fresh = effCharge <= FRESH_CHARGE_THRESHOLD ? 1 + freshBoost : 1;
     return base
-      .times(suit[cardSuit])
+      .times(suitMult)
       .times(1 + slope * effCharge)
       .times(fresh)
       .times(global)

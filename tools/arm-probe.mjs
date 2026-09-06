@@ -9,7 +9,7 @@ await page.waitForFunction(() => window.__game && window.__game.table);
 await page.evaluate(() => {
   window.__table.skipChoreography();
   // K♠ (12) alone at the bottom of t0; t1 empty; rest empty; stock has a few cards.
-  const board = { stock: [20, 21, 22], waste: [], foundations: [[], [], [], []], tableau: Array.from({ length: 7 }, (_, i) => ({ down: [], up: i === 0 ? [12] : [] })), drawCount: 1, redealsLeft: -1, moves: 0, glass: [] };
+  const board = { stock: [20, 21, 22], waste: [], foundations: [[], [], [], []], tableau: Array.from({ length: 7 }, (_, i) => ({ down: [], up: i === 0 ? [12] : [] })), drawCount: 1, redealsLeft: -1, moves: 0, glass: [], dealt: 52 };
   window.__game.setBoardForTesting(board);
 });
 await page.waitForTimeout(300);
