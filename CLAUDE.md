@@ -115,5 +115,7 @@ docs/  brainstorming/  memory/  .claude/{agents,skills}
   The tier-2 upgrades are decisions rather than more of the same (Comeback pays *more* when little is awake;
   Underdog Suits and Favored Suit pull against each other; Fresh Cards pulls against Patience). Every capped
   upgrade maxes at 49–71 simulated minutes, asserted at a 40-minute floor in `tests/balance.test.ts`.
-- Open: DynamoDB store + real auth, Ascension (layer 3 — see `docs/12-ascension.md` for the deck-size
-  refactor it needs first), sound *samples*, a Lighthouse pass.
+- **Deck size is data, not an assumption** — `engine/deck.ts` (`DeckShape`, `deckSize`, `deckCards`,
+  `cardDefIn`), `state.deck` holds a shape id, save v7. One shape exists (the standard 52) and behaviour is
+  unchanged. This is step 1 of `docs/12-ascension.md`, which now lists exactly what step 2 costs.
+- Open: Ascension steps 2–3, DynamoDB store + real auth, sound *samples*, a Lighthouse pass.

@@ -2,6 +2,8 @@
  * Save migrations. Switch on `raw.version`; each branch upgrades the shape by one step.
  * `deserialize`'s repair pass is the safety net — migrate only needs to reshape, not validate.
  */
+import { STANDARD_52 } from '../deck';
+import { SAVE_VERSION } from '../state';
 
 /** A save payload of unknown shape and vintage, prior to migration or repair. */
 export type RawSave = Record<string, unknown>;
@@ -98,6 +100,39 @@ function v5ToV6(raw: RawSave): RawSave {
   return raw;
 }
 
+/**
+ * v6 -> v7 (docs/12-ascension.md's deck-shape refactor): adds `deck`, the id of the `DeckShape`
+ * that sizes `cards`. A pre-v7 save has only ever known the standard 52, so it starts there.
+ */
+function v6ToV7(raw: RawSave): RawSave {
+  if (typeof raw.deck !== 'string') raw.deck = STANDARD_52.id;
+  raw.version = 7;
+  return raw;
+}
+
+/**
+ * Applies every migration step needed to bring a save up to `SAVE_VERSION`.
+ *
+ * `migrate` advances exactly ONE version per call, so calling it once on a v1 save leaves a v2 save
+ * behind. Today every step only adds a field with a default, which `deserialize`'s repair pass would
+ * have filled in anyway — so nothing was visibly broken. The moment a step has to *transform* data
+ * (rename a field, rescale a value) the skipped steps would silently lose progress instead, which is
+ * exactly what invariant #10 exists to prevent. So the chain is run to completion here, once, and the
+ * loop cannot spin: a step that fails to advance the version ends it.
+ */
+export function migrateToCurrent(raw: RawSave): RawSave {
+  let current = raw;
+  for (let guard = 0; guard <= SAVE_VERSION + 1; guard++) {
+    const before = typeof current.version === 'number' ? current.version : 0;
+    if (before >= SAVE_VERSION) break;
+    const next = migrate(current);
+    const after = typeof next.version === 'number' ? next.version : 0;
+    current = next;
+    if (after <= before) break;
+  }
+  return current;
+}
+
 export function migrate(raw: RawSave): RawSave {
   const version = typeof raw.version === 'number' ? raw.version : 0;
   switch (version) {
@@ -112,6 +147,8 @@ export function migrate(raw: RawSave): RawSave {
     case 5:
       return v5ToV6(raw);
     case 6:
+      return v6ToV7(raw);
+    case 7:
       return raw;
     default:
       // Unknown, missing, or future version: pass through. `deserialize`'s repair pass fills

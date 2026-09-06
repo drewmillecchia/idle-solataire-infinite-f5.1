@@ -3,6 +3,7 @@
  */
 
 // Core types and helpers.
+export * from './deck';
 export * from './types';
 export * from './events';
 export * from './rng';

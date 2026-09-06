@@ -14,6 +14,7 @@
  * itself has already lost its tail. Per ADR-004 that is acceptable: the odometer is flavour.
  */
 import Decimal from 'break_eternity.js';
+import { deckShape, deckSize, type DeckShape } from './deck';
 import type { GameState } from './state';
 import type { CardId } from './types';
 
@@ -49,7 +50,40 @@ function log10OfBigInt(v: bigint): number {
  */
 export const LOG10_FACT_52: number = log10OfBigInt(FACT_52);
 
-const FACT_52_DECIMAL = new Decimal(FACT_52.toString());
+const DECK_FACT_CACHE = new Map<string, bigint>();
+
+/** `deckSize(shape)!` as an exact bigint, memoised per shape id. For the standard 52 this is `FACT_52`. */
+export function deckFactorial(shape: DeckShape): bigint {
+  let v = DECK_FACT_CACHE.get(shape.id);
+  if (v === undefined) {
+    v = factorial(deckSize(shape));
+    DECK_FACT_CACHE.set(shape.id, v);
+  }
+  return v;
+}
+
+const DECK_LOG10_FACT_CACHE = new Map<string, number>();
+
+/** `log10(deckFactorial(shape))`, memoised per shape id. For the standard 52 this is `LOG10_FACT_52`. */
+export function log10DeckFactorial(shape: DeckShape): number {
+  let v = DECK_LOG10_FACT_CACHE.get(shape.id);
+  if (v === undefined) {
+    v = log10OfBigInt(deckFactorial(shape));
+    DECK_LOG10_FACT_CACHE.set(shape.id, v);
+  }
+  return v;
+}
+
+const DECK_FACT_DECIMAL_CACHE = new Map<string, Decimal>();
+
+function deckFactorialDecimal(shape: DeckShape): Decimal {
+  let v = DECK_FACT_DECIMAL_CACHE.get(shape.id);
+  if (!v) {
+    v = new Decimal(deckFactorial(shape).toString());
+    DECK_FACT_DECIMAL_CACHE.set(shape.id, v);
+  }
+  return v;
+}
 
 /**
  * Floor of a finite, non-negative Decimal as a bigint, keeping `SIG_DIGITS` significant digits.
@@ -73,14 +107,17 @@ function decimalToBigInt(d: Decimal): bigint {
  * somehow carries a NaN or an infinity clamps rather than throwing (invariant #10).
  */
 export function arrangementIndex(state: GameState): bigint {
+  const shape = deckShape(state.deck);
+  const fact = deckFactorial(shape);
+  const factDecimal = deckFactorialDecimal(shape);
   const d = state.lifetimeShuffles;
   if (Number.isNaN(d.sign) || Number.isNaN(d.mag) || Number.isNaN(d.layer)) return 0n;
   if (d.sign <= 0) return 0n;
-  if (!Decimal.isFinite(d)) return FACT_52 - 1n;
-  if (d.gte(FACT_52_DECIMAL)) return FACT_52 - 1n;
+  if (!Decimal.isFinite(d)) return fact - 1n;
+  if (d.gte(factDecimal)) return fact - 1n;
   const v = decimalToBigInt(d.floor());
   if (v < 0n) return 0n;
-  return v >= FACT_52 ? FACT_52 - 1n : v;
+  return v >= fact ? fact - 1n : v;
 }
 
 /**
@@ -125,11 +162,12 @@ export function indexFromArrangement(cards: readonly CardId[]): bigint {
  * so they cannot drift apart.
  */
 export function journeyFraction(state: GameState): number {
+  const log10Fact = log10DeckFactorial(deckShape(state.deck));
   const d = state.lifetimeShuffles;
   if (Number.isNaN(d.sign) || Number.isNaN(d.mag) || Number.isNaN(d.layer)) return 0;
   if (d.sign <= 0) return 0;
   if (!Decimal.isFinite(d)) return 1;
   const l = d.plus(1).log10().toNumber();
   if (!Number.isFinite(l)) return l > 0 ? 1 : 0;
-  return Math.min(1, Math.max(0, l / LOG10_FACT_52));
+  return Math.min(1, Math.max(0, l / log10Fact));
 }

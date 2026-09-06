@@ -2,6 +2,7 @@
  * Core engine types. PURE: no DOM, no Svelte, no Pixi. See CLAUDE.md invariants.
  */
 import type Decimal from 'break_eternity.js';
+import { STANDARD_52, cardDefIn, deckCards } from './deck';
 
 export type Suit = 'S' | 'H' | 'D' | 'C';
 export const SUITS: readonly Suit[] = ['S', 'H', 'D', 'C'];
@@ -18,18 +19,24 @@ export interface CardDef {
   rank: Rank;
 }
 
+/**
+ * STANDARD DECK ONLY: `suitIndex*13 + (rank-1)`. Shape-aware code (anything that does not know
+ * it is always the standard 52) should use `cardDefIn`/`deckCards` from `./deck` instead.
+ */
 export function cardId(suit: Suit, rank: Rank): CardId {
   return SUITS.indexOf(suit) * 13 + (rank - 1);
 }
+/**
+ * STANDARD DECK ONLY: the inverse of `cardId`, now a lookup into `STANDARD_52` rather than
+ * `id / 13` arithmetic. Shape-aware code should use `cardDefIn` from `./deck` instead.
+ */
 export function cardDef(id: CardId): CardDef {
-  const suit = SUITS[Math.floor(id / 13)];
-  if (!suit) throw new RangeError(`bad card id ${id}`);
-  return { id, suit, rank: ((id % 13) + 1) as Rank };
+  return cardDefIn(STANDARD_52, id);
 }
 export function isRed(suit: Suit): boolean {
   return suit === 'H' || suit === 'D';
 }
-export const STANDARD_DECK: readonly CardDef[] = Array.from({ length: 52 }, (_, i) => cardDef(i));
+export const STANDARD_DECK: readonly CardDef[] = deckCards(STANDARD_52);
 
 /** Per-card generator state. A card earns nothing until `awake`. */
 export interface CardState {

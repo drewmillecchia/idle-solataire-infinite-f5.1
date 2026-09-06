@@ -1,9 +1,13 @@
 /**
  * Numbering systems: the rank -> value map (docs/02-game-design.md §3). PURE.
- * Every system is normalized so its 13-rank total equals the natural total (91), so switching
- * systems redistributes value rather than adding it.
+ * Every system is normalized so its rank total (one term per rank of the active deck shape)
+ * equals the shape's natural total (sum 1..n — 91 for the standard 52's 13 ranks), so switching
+ * systems redistributes value rather than adding it. The rank count and total are read from
+ * `STANDARD_52` (docs/12-ascension.md's deck-shape refactor) rather than typed in as 13 and 91;
+ * for the one shape that exists today the numbers are identical to what they always were.
  */
 import Decimal from 'break_eternity.js';
+import { STANDARD_52 } from './deck';
 import { D } from './numbers';
 import type { NumberingId, Rank } from './types';
 
@@ -31,21 +35,23 @@ export function numberingLabel(id: NumberingId): string {
   return LABELS[id];
 }
 
+// Tied to the standard deck's 13 ranks (docs/12-ascension.md: a shape with a different rank
+// count needs its own prime table — not needed until Ascension actually ships one).
 const FIRST_13_PRIMES: readonly number[] = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41];
 
 function rawSequence(id: NumberingId): Decimal[] {
   switch (id) {
     case 'natural':
-      return RANKS_1_13.map((r) => D(r));
+      return RANKS_1_N.map((r) => D(r));
     case 'prime':
       return FIRST_13_PRIMES.map((p) => D(p));
     case 'triangular':
-      return RANKS_1_13.map((r) => D((r * (r + 1)) / 2));
+      return RANKS_1_N.map((r) => D((r * (r + 1)) / 2));
     case 'fibonacci': {
       const out: Decimal[] = [];
       let a = D(1);
       let b = D(2);
-      for (let i = 0; i < 13; i++) {
+      for (let i = 0; i < RANK_COUNT; i++) {
         out.push(a);
         const next = a.plus(b);
         a = b;
@@ -54,11 +60,11 @@ function rawSequence(id: NumberingId): Decimal[] {
       return out;
     }
     case 'powers':
-      return RANKS_1_13.map((r) => Decimal.pow(2, r - 1));
+      return RANKS_1_N.map((r) => Decimal.pow(2, r - 1));
     case 'factorial': {
       const out: Decimal[] = [];
       let acc = D(1);
-      for (let r = 1; r <= 13; r++) {
+      for (let r = 1; r <= RANK_COUNT; r++) {
         acc = acc.times(r);
         out.push(acc);
       }
@@ -67,7 +73,7 @@ function rawSequence(id: NumberingId): Decimal[] {
     case 'tetration': {
       const out: Decimal[] = [];
       let acc = D(1);
-      for (let r = 1; r <= 13; r++) {
+      for (let r = 1; r <= RANK_COUNT; r++) {
         out.push(acc);
         acc = Decimal.pow(2, acc);
       }
@@ -76,9 +82,12 @@ function rawSequence(id: NumberingId): Decimal[] {
   }
 }
 
-const RANKS_1_13 = Array.from({ length: 13 }, (_, i) => i + 1);
-
-const NATURAL_TOTAL = D(91);
+// Read from the deck shape rather than typed in: `RANK_COUNT` is 13 and `NATURAL_TOTAL` is 91
+// for the standard 52 today, exactly as before — but they are now a consequence of the shape,
+// not a pair of literals someone has to remember to change together.
+const RANKS_1_N = STANDARD_52.ranks;
+const RANK_COUNT = RANKS_1_N.length;
+const NATURAL_TOTAL = D((RANK_COUNT * (RANK_COUNT + 1)) / 2);
 
 interface NormalizedSystem {
   values: Decimal[]; // index 0 -> rank 1 ... index 12 -> rank 13

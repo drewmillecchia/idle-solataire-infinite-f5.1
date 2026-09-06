@@ -4,6 +4,7 @@
  */
 import Decimal from 'break_eternity.js';
 import { CONSTELLATION, UPGRADES } from '$content/index';
+import { deckShape, deckSize } from '../deck';
 import { D } from '../numbers';
 import { rankValue } from '../numbering';
 import { cardDef, SUITS } from '../types';
@@ -84,6 +85,7 @@ export function derive(state: GameState): Derived {
   let freshBoost = 0;
 
   const cardStates = state.cards;
+  const deckN = deckSize(deckShape(state.deck));
   const awakeCount = cardStates.reduce((n, c) => (c.awake ? n + 1 : n), 0);
   const homedThisRun = state.run.homedThisRun;
   /** How many cards have already come home THIS hand (Big Turn). */
@@ -127,7 +129,7 @@ export function derive(state: GameState): Derived {
         sparkMult = sparkMult.times(1 + effect.per * level);
         break;
       case 'awakeMult':
-        awake = awake.times(1 + effect.per * level * (awakeCount / 52));
+        awake = awake.times(1 + effect.per * level * (awakeCount / deckN));
         break;
       case 'devotionMult':
         devotion = devotion.times(1 + effect.per * level * Math.log10(1 + devotionCount));
@@ -140,7 +142,7 @@ export function derive(state: GameState): Derived {
         break;
       case 'comebackMult':
         // Pays MORE the fewer cards are awake: a comeback lever, strongest at the start of a run.
-        global = global.times(1 + effect.per * level * (1 - awakeCount / 52));
+        global = global.times(1 + effect.per * level * (1 - awakeCount / deckN));
         break;
       case 'handsWonMult':
         global = global.times(1 + effect.per * level * Math.log10(1 + state.run.handsWon));
@@ -325,7 +327,7 @@ export function derive(state: GameState): Derived {
     offlineCapSeconds,
     autoDealerUnlocked,
     cutYieldMult,
-    keepAwake: Math.min(52, keepAwake),
+    keepAwake: Math.min(deckN, keepAwake),
     startCharge,
     keepCharge: 0,
     markSlots,

@@ -136,3 +136,28 @@ describe('save v6 — per-game records', () => {
     expect(repaired.stats.perGame.golf).toEqual({ hands: 0, wins: 2, bestSeconds: null });
   });
 });
+
+describe('the migration chain runs to completion', () => {
+  it('brings a save from every past version up to the current one in a single deserialize', () => {
+    // `migrate` advances one version per call. Loading has to apply the whole chain, or a step that
+    // transforms rather than adds would be skipped and the data quietly repaired to a default.
+    const current = createInitialState(0);
+    for (let from = 1; from < SAVE_VERSION; from++) {
+      const raw = JSON.parse(serialize(current)) as Record<string, unknown>;
+      raw.version = from;
+      const back = deserialize(JSON.stringify(raw));
+      expect(back.version, `a v${from} save should load as v${SAVE_VERSION}`).toBe(SAVE_VERSION);
+      expect(back.cards).toHaveLength(52);
+      expect(back.deck).toBe('standard-52');
+      expect(back.stats.perGame).toBeDefined();
+      expect(back.run.hand.seed).toBeTypeOf('number');
+    }
+  });
+
+  it('does not spin on a version that refuses to advance', () => {
+    const raw = JSON.parse(serialize(createInitialState(0))) as Record<string, unknown>;
+    raw.version = -3; // unknown vintage: migrate passes it through unchanged
+    const back = deserialize(JSON.stringify(raw));
+    expect(back.version).toBe(SAVE_VERSION);
+  });
+});

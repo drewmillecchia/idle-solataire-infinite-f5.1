@@ -43,9 +43,22 @@ and a deck of any size.
 | `table/cardFaces.ts` | 4 suit paths, 13 rank labels, red/black | A suit registry with path + ink colour; a Joker face; the Zero. |
 | `marks`, `constellation` | ids 0..51 in placements | Placements survive a shape change only if the card still exists; drop the rest on migration, and say so in the ledger. |
 
-**Sequencing.** (1) Introduce `DeckShape` with exactly one shape (the standard 52) and make everything
-read it — no behaviour change, all tests still green. (2) Add the Joker shape behind a flag and make the
-five games deal it. (3) Only then build the Ascension layer itself.
+**Sequencing.** (1) ✅ **Done 2026-09-05.** `engine/deck.ts` defines `DeckShape` with exactly one shape
+(`STANDARD_52`); `state.deck` holds a shape id (save v7); `deckSize` / `deckCards` / `cardDefIn` replace the
+`id / 13` arithmetic and every hardcoded 52 in `state`, `numbering`, `permutation`, `derive` and the save
+repair. No behaviour change: 490 tests pass and **not one existing test needed editing**, because the
+standard deck is still exactly 52. (2) Add the Joker shape and make the five games deal `context.deck`.
+(3) Only then build the Ascension layer itself.
+
+**What step 1 could not reach, which is therefore what step 2 costs.** Each needs a directory the refactor
+deliberately stayed out of:
+
+| Still assumes 52 | Where | Why it waited |
+| --- | --- | --- |
+| `deal(STANDARD_DECK)` | `rules/games/*.ts` (all five) | A game must be handed the shape; that is a contract change (`deal(rng, config, twists)` gains a deck), so it belongs with the Joker, not before it. |
+| Suit paths, rank labels, red/black | `table/cardFaces.ts` | Needs a suit registry with ink colour, plus a Joker face. Pure rendering; no engine risk. |
+| `rankValue(system, rank)` reads `STANDARD_52` internally | `engine/numbering.ts` | Making it shape-aware means changing its signature, and `economy/numberingLadder.ts` calls it. One extra argument, threaded through two files. |
+| Mark placements are card ids | `engine/marks/*` | A shape change must drop placements for cards that no longer exist, and say so in the ledger. |
 
 ## The layer
 

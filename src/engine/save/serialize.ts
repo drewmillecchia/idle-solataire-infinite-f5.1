@@ -7,6 +7,7 @@
 // browser-safe fallback path, guarded by `typeof Buffer`, and must never force bundlers to
 // resolve a Node built-in for the browser bundle.
 import Decimal from 'break_eternity.js';
+import { deckShape, deckSize, STANDARD_52 } from '../deck';
 import { createInitialState, SAVE_VERSION } from '../state';
 import type {
   GameRecord,
@@ -23,7 +24,7 @@ import { markDef, syncMarkCache } from '../marks/placement';
 import { ROLL_MAX, ROLL_MIN } from '../economy/hand';
 import { NUMBERING_ORDER } from '../numbering';
 import type { CardState, NumberingId, WayId } from '../types';
-import { migrate } from './migrate';
+import { migrateToCurrent } from './migrate';
 import type { RawSave } from './migrate';
 
 const WAY_IDS: readonly WayId[] = ['none', 'hand', 'dealer', 'gambler', 'scholar'];
@@ -114,10 +115,15 @@ function toStringNumberRecord(value: unknown, fallback: Record<string, number>):
   return out;
 }
 
-function repairCards(value: unknown): CardState[] {
+/**
+ * Repairs the card array to exactly `size` entries: too few are padded with fresh asleep cards,
+ * too many are truncated (invariant #10: repair, never throw). `size` comes from the save's
+ * (repaired) `deck` shape, not a hardcoded 52.
+ */
+function repairCards(value: unknown, size: number): CardState[] {
   const arr = Array.isArray(value) ? value : [];
   const out: CardState[] = [];
-  for (let i = 0; i < 52; i++) {
+  for (let i = 0; i < size; i++) {
     const c = arr[i];
     if (isRecord(c)) {
       out.push({
@@ -130,6 +136,12 @@ function repairCards(value: unknown): CardState[] {
     }
   }
   return out;
+}
+
+/** Repairs the deck shape id: an unknown or missing id falls back to the standard 52. */
+function repairDeckId(value: unknown): string {
+  const raw = typeof value === 'string' ? value : STANDARD_52.id;
+  return deckShape(raw).id;
 }
 
 function repairNumbering(value: unknown, fallback: NumberingId): NumberingId {
@@ -319,13 +331,16 @@ function repairGameConfig(value: unknown): Record<string, Record<string, string>
 
 function repair(raw: RawSave, now: number): GameState {
   const initial = createInitialState(now);
+  const deckId = repairDeckId(raw.deck);
+  const cardCount = deckSize(deckShape(deckId));
   const state: GameState = {
     version: SAVE_VERSION,
     createdAt: toNum(raw.createdAt, initial.createdAt),
     lastSeenAt: toNum(raw.lastSeenAt, now),
     shuffles: toDecimal(raw.shuffles, initial.shuffles),
     lifetimeShuffles: toDecimal(raw.lifetimeShuffles, initial.lifetimeShuffles),
-    cards: repairCards(raw.cards),
+    cards: repairCards(raw.cards, cardCount),
+    deck: deckId,
     numbering: repairNumbering(raw.numbering, initial.numbering),
     unlockedNumberings: repairNumberingList(raw.unlockedNumberings, initial.unlockedNumberings),
     run: repairRun(raw.run, initial.run),
@@ -357,7 +372,7 @@ export function deserialize(json: string): GameState {
     console.warn('[save] save data was not an object; starting fresh');
     return createInitialState(now);
   }
-  const migrated = migrate(parsed);
+  const migrated = migrateToCurrent(parsed);
   return repair(migrated, now);
 }
 

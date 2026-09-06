@@ -2,11 +2,12 @@
  * Save-shape game state and its factory. PURE. See CLAUDE.md invariants #5 and #10.
  */
 import Decimal from 'break_eternity.js';
+import { deckSize, STANDARD_52 } from './deck';
 import { D } from './numbers';
 import type { CardId, CardState, NumberingId, WayId } from './types';
 
 /** Bump on any state-shape change; add a matching branch in save/migrate.ts. */
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 
 /** Per-hand scratch for the Marks that only reach across one hand. Reset by `dealHand`. */
 export interface HandState {
@@ -124,6 +125,8 @@ export interface GameState {
   /** Monotonic odometer; never decreases through a reset. */
   lifetimeShuffles: Decimal;
   cards: CardState[];
+  /** Id of the `DeckShape` (`engine/deck.ts`) that sizes `cards`. Defaults to the standard 52. */
+  deck: string;
   numbering: NumberingId;
   unlockedNumberings: NumberingId[];
   run: RunState;
@@ -144,7 +147,8 @@ export function createInitialState(now: number): GameState {
     lastSeenAt: now,
     shuffles: D(0),
     lifetimeShuffles: D(0),
-    cards: Array.from({ length: 52 }, () => ({ awake: false, charge: 0, marks: [] })),
+    cards: Array.from({ length: deckSize(STANDARD_52) }, () => ({ awake: false, charge: 0, marks: [] })),
+    deck: STANDARD_52.id,
     numbering: 'natural',
     unlockedNumberings: ['natural'],
     run: {
